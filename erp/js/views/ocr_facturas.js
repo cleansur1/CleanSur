@@ -747,6 +747,12 @@ export const OcrFacturasView = {
     this.bindResultEvents();
   },
 
+  async handleFilesSelect(files) {
+    if (!files?.length) return;
+    this.extractedInvoice = null;
+    alert('La lectura automática de facturas todavía no está conectada a un OCR real en la versión web. No se registró ninguna compra ni se modificó el stock. Se está migrando el lector del ERP de Antigravity.');
+  },
+
   bindResultEvents() {
     const btnToggleImage = document.getElementById('btn-toggle-image');
     if (btnToggleImage) {
