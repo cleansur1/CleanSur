@@ -754,20 +754,20 @@ export const OcrFacturasView = {
   },
 
   parseSysOrderText(raw) {
-    const text = String(raw || '').replace(/\\u00a0/g, ' ');
-    if (!/SYS PRODUCTOS DE LIMPIEZA|SATURNINO FRANCO|#\\s*7572/i.test(text)) return null;
-    const money = v => Number(String(v).replace(/\\./g,'').replace(',','.'));
+    const text = String(raw || '').replace(/\u00a0/g, ' ');
+    if (!/SYS PRODUCTOS DE LIMPIEZA|SATURNINO FRANCO|#\s*7572/i.test(text)) return null;
+    const money = v => Number(String(v).replace(/\./g,'').replace(',','.'));
     const rows = [];
-    const re = /\\b(200\\d{4})\\s+(CAJA\\s+.{4,110}?)\\s+(\\d{1,3})\\s+\\$?\\s*([\\d.]+,\\d{2})\\s+\\$?\\s*([\\d.]+,\\d{2})(?=\\s|$)/gi;
+    const re = /\b(200\d{4})\s+(CAJA\s+.{4,110}?)\s+(\d{1,3})\s+\$?\s*([\d.]+,\d{2})\s+\$?\s*([\d.]+,\d{2})(?=\s|$)/gi;
     for (const m of text.matchAll(re)) {
-      const desc=m[2].replace(/\\s+/g,' ').trim();
+      const desc=m[2].replace(/\s+/g,' ').trim();
       const qty=Number(m[3]), price=money(m[4]), total=money(m[5]);
       if (Math.abs(qty*price-total)>0.03) continue;
       rows.push({code:m[1],description:desc,quantity:qty,boxes_count:qty,unit_price:price,line_total:total,discount_pct:0});
     }
     const codes = rows.map(r=>r.code);
     const duplicates=[...new Set(codes.filter((code,i)=>codes.indexOf(code)!==i))];
-    return {rows,duplicates,orderNumber:text.match(/#\\s*(7572)/)?.[1]||'7572'};
+    return {rows,duplicates,orderNumber:text.match(/#\s*(7572)/)?.[1]||'7572'};
   },
 
   async handleFilesSelect(files) {
