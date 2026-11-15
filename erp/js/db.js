@@ -1019,25 +1019,31 @@ export class Database {
   }
 
   // Busca un producto existente por Código (SKU) exacto o por Descripción exacta
-  findProductMatch(code, name, productsList = null) {
+  findProductMatch(code, name, productsList = null, supplierId = null) {
     const products = productsList || this.getProducts();
     const normCode = this.normalizeCode(code);
     const normName = this.normalizeText(name);
 
+    // Código presente: jamás recurrir al nombre si no coincide el código.
+    // Los códigos de proveedor pueden repetirse entre proveedores diferentes.
     if (normCode) {
-      const bySku = products.find(p => {
+      const candidates = products.filter(p => {
         const pSku = this.normalizeCode(p.sku);
         const pBar = this.normalizeCode(p.barcode);
         return pSku === normCode || pBar === normCode || (pSku && pSku.endsWith(`-${normCode}`));
       });
-      if (bySku) return bySku;
+      if (!candidates.length) return null;
+      if (supplierId) {
+        const sameSupplier = candidates.find(p => String(p.preferred_supplier_id || '') === String(supplierId));
+        if (sameSupplier) return sameSupplier;
+        // No atribuir códigos iguales de otro proveedor sin equivalencia explícita.
+        return candidates.find(p => !p.preferred_supplier_id) || null;
+      }
+      return candidates.length === 1 ? candidates[0] : null;
     }
 
-    if (normName) {
-      const byName = products.find(p => this.normalizeText(p.name) === normName);
-      if (byName) return byName;
-    }
-
+    // Sin código: el nombre solo puede ofrecer una coincidencia candidata para revisión.
+    // No usarlo para fusionar productos ni alterar stock automáticamente.
     return null;
   }
 
@@ -1189,7 +1195,7 @@ export class Database {
         prod = products.find(p => p.id === it.product_id);
       }
       if (!prod) {
-        prod = this.findProductMatch(it.code, it.product_name, products) || this.findProductMatch(it.code, it.invoice_description, products);
+        prod = this.findProductMatch(it.code, it.product_name, products, supplier.id);
       }
 
       let wasCreatedNow = false;
