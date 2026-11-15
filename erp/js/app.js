@@ -379,13 +379,17 @@ async function bootCentralReadOnly() {
     error.textContent = '';
     try {
       await signInAdmin(form.elements.email.value, form.elements.password.value);
-      const names = Object.keys(centralTables);
+      const names = [...Object.keys(centralTables),'arca_config','arca_invoices','seasons','users','cost_history'];
       const values = await Promise.all(names.map(async name => {
-        const rows = await readCentral(centralTables[name], {order:'id.asc',limit:10000});
+        const rows = await readCentral(centralTables[name] || name, {order:'id.asc',limit:10000});
         if (rows.length >= 10000) throw new Error('Límite de registros alcanzado en '+name);
         return rows;
       }));
       const snapshot = Object.fromEntries(names.map((name,i)=>[name,values[i]]));
+      // En el ERP original, ARCA es un objeto de configuración, no una lista.
+      snapshot.arca_config = Array.isArray(snapshot.arca_config) ? (snapshot.arca_config[0] || {}) : {};
+      // Estas dos tablas no tienen fecha created_at, pero sí se consultan por ID.
+      // Nunca sobrescribir los datos remotos desde una pantalla local.
       const centralDashboard = await readCentralDashboard();
       // Mantener en memoria, sin escribir ni sobrescribir el respaldo local.
       db.getTable = name => structuredClone(snapshot[name] ?? []);
