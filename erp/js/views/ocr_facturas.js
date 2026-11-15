@@ -749,8 +749,75 @@ export const OcrFacturasView = {
 
   async handleFilesSelect(files) {
     if (!files?.length) return;
+    const allowed = files.every(f => f.type === 'application/pdf' || f.type.startsWith('image/') || /\\.(pdf|png|jpe?g|webp)$/i.test(f.name));
+    if (!allowed) { alert('Solo se admiten imágenes y PDF.'); return; }
+    this.uploadedFileName = files.map(f => f.name).join(', ');
     this.extractedInvoice = null;
-    alert('La lectura automática de facturas todavía no está conectada a un OCR real en la versión web. No se registró ninguna compra ni se modificó el stock. Se está migrando el lector del ERP de Antigravity.');
+    this.isProcessing = true;
+    this.processingStatus = 'Leyendo contenido real de los archivos…';
+    this.refreshResultView();
+    try {
+      let allText = '';
+      for (const file of files) {
+        let text = '';
+        if (file.type === 'application/pdf' || /\\.pdf$/i.test(file.name)) {
+          if (!window.pdfjsLib) throw new Error('No se cargó PDF.js. Actualizá la página.');
+          const pdf = await window.pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+          if (pdf.numPages > 25) throw new Error('PDF demasiado largo: máximo 25 páginas.');
+          for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            const extracted = content.items.map(item => item.str || '').join(' ');
+            if (extracted.trim().length > 50) text += '\\n' + extracted;
+            else {
+              const viewport = page.getViewport({scale:1.7});
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+              await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+              if (!window.Tesseract) throw new Error('No se cargó Tesseract OCR.');
+              const result = await window.Tesseract.recognize(canvas,'spa+eng');
+              text += '\\n' + (result.data?.text || '');
+            }
+          }
+        } else {
+          if (!window.Tesseract) throw new Error('No se cargó Tesseract OCR.');
+          const result = await window.Tesseract.recognize(file,'spa+eng');
+          text = result.data?.text || '';
+        }
+        allText += '\\n' + text;
+      }
+      if (!allText.trim()) throw new Error('No se pudo leer texto del comprobante. Probá con una foto más nítida.');
+      const lines = allText.split(/\\n/).map(x => x.trim()).filter(Boolean);
+      const cuit = allText.match(/(?:CUIT|C\\.U\\.I\\.T)[^\\d]{0,15}(\\d{2}[- ]?\\d{8}[- ]?\\d)/i)?.[1] || '';
+      const invoiceNumber = allText.match(/(?:FACTURA|COMPROBANTE|N[°ºo.]\\s*)[^\\n]{0,50}?(\\d{4,5}[- ]\\d{6,8})/i)?.[1] || allText.match(/\\b\\d{4,5}-\\d{6,8}\\b/)?.[0] || '';
+      const totalCandidates = [...allText.matchAll(/(?:TOTAL\\s*(?:A\\s*PAGAR)?|IMPORTE\\s*TOTAL)\\s*[:$ ]*([\\d.,]+)/gi)];
+      const parseMoney = raw => {
+        const str = String(raw || '').replace(/[^\\d,.]/g,'');
+        if (str.includes(',') && str.includes('.')) return Number(str.replace(/\\./g,'').replace(',','.'));
+        if (str.includes(',')) return Number(str.replace(',','.'));
+        return Number(str);
+      };
+      const total = totalCandidates.length ? parseMoney(totalCandidates.at(-1)[1]) : 0;
+      // Sin un parser de proveedor validado, no inventar renglones ni cantidades.
+      this.extractedInvoice = {
+        key:'OCR_REAL_PENDIENTE_REVISION', supplier_name:'', supplier_cuit:cuit,
+        invoice_number:invoiceNumber, date:new Date().toISOString().slice(0,10),
+        vat_included:true, vat_rate:21, discount_pct:0,
+        invoice_stated_total:Number.isFinite(total)?total:0,
+        notes:'OCR real: verificar proveedor, fecha, número, todos los renglones y totales contra el documento original antes de guardar.',
+        items:[]
+      };
+      this.ocrRawText = allText;
+      this.ocrRequiresReview = true;
+      this.isProcessing = false;
+      this.refreshResultView();
+      alert('Texto extraído del documento real. Completá y verificá manualmente todos los renglones; todavía no se registró ninguna compra ni se modificó stock.');
+    } catch(error) {
+      this.isProcessing = false;
+      this.extractedInvoice = null;
+      this.refreshResultView();
+      alert('No se pudo leer la factura: ' + error.message);
+    }
   },
 
   bindResultEvents() {
