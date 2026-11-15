@@ -353,7 +353,7 @@ export const OcrFacturasView = {
       sumBruto += pkgCalc.lineSubtotalBruto;
       sumNetoSinIvaAdicional += pkgCalc.lineNetTotal;
 
-      const existingProd = db.findProductMatch(it.code, commercialName || rawDesc, currentProducts);
+      const existingProd = db.findProductMatch(it.code, commercialName || rawDesc, currentProducts, db.findSupplierMatch({name:inv.supplier_name,cuit:inv.supplier_cuit})?.id || null);
       const baseStockInDb = existingProd ? (Number(existingProd.current_stock) || 0) : 0;
       const stockAfterRow = baseStockInDb + pkgCalc.saleableUnits;
 
