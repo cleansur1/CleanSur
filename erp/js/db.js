@@ -35,6 +35,7 @@ export class Database {
 
   // Inicialización de tablas y seeders
   init() {
+    if (new URLSearchParams(location.search).get('central') === '1') { this.initialized = true; return; }
     if (this.initialized) return;
 
     const CURRENT_SEED_VERSION = '6.0-STAYCLEAN-ZERO';
