@@ -432,7 +432,11 @@ async function bootCentralReadOnly() {
           const handler = control.getAttribute('onclick') || '';
           const safeNavigation = handler.includes('window.app.navigate(');
           const stockControl = app.currentRoute === 'stock' && ['openAdjustModal(', 'onAdjustProductChange(', 'switchTab('].some(method => handler.includes('window.stockModule.' + method));
-          if (safeNavigation || stockControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          const ocrReadControl = app.currentRoute === 'compras' && (
+            control.closest('#ocr-dropzone, #ocr-file-input, #btn-toggle-image, #btn-add-ocr-row') ||
+            control.classList.contains('btn-remove-ocr-row')
+          );
+          if (safeNavigation || stockControl || ocrReadControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Vista de prueba: las operaciones están deshabilitadas.');
         }
