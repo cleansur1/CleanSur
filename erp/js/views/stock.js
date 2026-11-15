@@ -1,3 +1,4 @@
+import { setCentralStock, readCentral } from '../supabase_erp_adapter.js';
 // Módulo de Inventario & Stock para Limpieza Caviahue
 // Stock valorizado, cálculo de días de stock/cobertura, ajuste manual obligatorio con trazabilidad y filtros.
 
@@ -282,7 +283,7 @@ window.stockModule = {
     }
   },
 
-  submitAdjust(e) {
+  async submitAdjust(e) {
     e.preventDefault();
     const prodId = document.getElementById('adjustProductId')?.value;
     const newStock = document.getElementById('adjustNewStock')?.value;
@@ -295,7 +296,23 @@ window.stockModule = {
     }
 
     try {
-      db.adjustStock(prodId, Number(newStock), reason, notes);
+      if (window.app?.centralReadOnly) {
+        const product=db.getProduct(prodId);
+        if (!product) throw new Error('Producto inexistente');
+        const expected=Number(product.current_stock), target=Number(newStock);
+        if (!Number.isInteger(target) || target<0) throw new Error('Cantidad inválida');
+        if (target===expected) throw new Error('El stock no cambió');
+        if (!confirm(`Registrar conteo central de ${product.name}: ${expected} → ${target} unidades?`)) return;
+        await setCentralStock(prodId,expected,target,`${reason}: ${notes}`);
+        const [products,movements]=await Promise.all([
+          readCentral('products',{order:'id.asc',limit:10000}),
+          readCentral('inventory_movements',{order:'id.asc',limit:10000})
+        ]);
+        db.centralSetTable('products',products);
+        db.centralSetTable('inventory_movements',movements);
+      } else {
+        db.adjustStock(prodId, Number(newStock), reason, notes);
+      }
       document.getElementById('adjustStockModal').classList.add('hidden');
       window.app.showNotification(`Ajuste de inventario registrado con trazabilidad.`, 'success');
       window.app.navigate('stock');
