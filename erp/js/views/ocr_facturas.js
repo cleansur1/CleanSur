@@ -799,7 +799,15 @@ export const OcrFacturasView = {
           for (let p = 1; p <= pdf.numPages; p++) {
             const page = await pdf.getPage(p);
             const content = await page.getTextContent();
-            const extracted = content.items.map(item => (item.str || '') + (item.hasEOL ? '\n' : ' ')).join('');
+            const positioned = content.items.filter(item => String(item.str || '').trim()).map(item => ({str:item.str, x:item.transform?.[4] || 0, y:item.transform?.[5] || 0}));
+            positioned.sort((a,b) => Math.abs(a.y-b.y)>3 ? b.y-a.y : a.x-b.x);
+            const grouped = [];
+            for (const item of positioned) {
+              const last = grouped[grouped.length-1];
+              if (last && Math.abs(last.y-item.y)<=3) last.items.push(item);
+              else grouped.push({y:item.y,items:[item]});
+            }
+            const extracted = grouped.map(line => line.items.sort((a,b)=>a.x-b.x).map(item=>item.str).join(' ')).join('\n');
             if (extracted.trim().length > 50) text += '\n' + extracted;
             else {
               const viewport = page.getViewport({scale:1.7});
@@ -821,6 +829,8 @@ export const OcrFacturasView = {
       if (!allText.trim()) throw new Error('No se pudo leer texto del comprobante. Probá con una foto más nítida.');
       const lines = allText.split(/\n/).map(x => x.trim()).filter(Boolean);
       const sysParsed = this.parseSysOrderText(allText);
+      const dateMatch = allText.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+      const documentDate = dateMatch ? [dateMatch[3],dateMatch[2],dateMatch[1]].join('-') : '';
       const cuit = allText.match(/(?:CUIT|C\.U\.I\.T)[^\d]{0,15}(\d{2}[- ]?\d{8}[- ]?\d)/i)?.[1] || '';
       const invoiceNumber = allText.match(/(?:FACTURA|COMPROBANTE|N[°ºo.]\s*)[^\n]{0,50}?(\d{4,5}[- ]\d{6,8})/i)?.[1] || allText.match(/\b\d{4,5}-\d{6,8}\b/)?.[0] || '';
       const totalCandidates = [...allText.matchAll(/(?:TOTAL\s*(?:A\s*PAGAR)?|IMPORTE\s*TOTAL)\s*[:$ ]*([\d.,]+)/gi)];
@@ -834,13 +844,14 @@ export const OcrFacturasView = {
       // Sin un parser de proveedor validado, no inventar renglones ni cantidades.
       this.extractedInvoice = {
         key:'OCR_REAL_PENDIENTE_REVISION', supplier_name:sysParsed ? 'SYS Laboratorio (Productos de Limpieza)' : '', supplier_cuit:cuit,
-        invoice_number:sysParsed?.orderNumber ? 'PED-' + sysParsed.orderNumber : invoiceNumber, date:'',
+        invoice_number:sysParsed?.orderNumber ? 'PED-' + sysParsed.orderNumber : invoiceNumber, date:documentDate,
         vat_included:true, vat_rate:21, discount_pct:0,
         invoice_stated_total:Number.isFinite(total)?total:0,
         notes:'OCR real: verificar proveedor, fecha, número, todos los renglones y totales contra el documento original antes de guardar.',
         items:sysParsed?.rows || []
       };
       this.ocrDuplicates = sysParsed?.duplicates || [];
+      this.ocrParsedRowCount = sysParsed?.rows.length || 0;
       this.ocrRawText = allText;
       this.ocrPreviewLines = lines;
       this.ocrRequiresReview = true;
