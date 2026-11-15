@@ -71,3 +71,16 @@ export async function setCentralStock(productId, expectedStock, newStock, reason
   if(!response.ok) throw new Error(data.message||'No se pudo registrar el conteo');
   return data;
 }
+
+export async function createCentralSale(sale, requestId=crypto.randomUUID()) {
+  const session=getAdminSession();
+  if(!session?.access_token) throw new Error('Iniciá sesión en StayClean');
+  const payload={...sale,request_id:requestId};
+  const response=await fetch(`${STAYCLEAN_SUPABASE_URL}/rest/v1/rpc/stayclean_staff_create_sale`,{
+    method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({p_sale:payload})
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(data.message||'No se pudo registrar la venta');
+  return data;
+}
