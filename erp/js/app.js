@@ -398,6 +398,11 @@ async function bootCentralReadOnly() {
       // Estas dos tablas no tienen fecha created_at, pero sí se consultan por ID.
       // Nunca sobrescribir los datos remotos desde una pantalla local.
       const centralDashboard = await readCentralDashboard();
+      const loadedProducts = snapshot.products?.length || 0;
+      const loadedStock = (snapshot.products || []).reduce((sum, p) => sum + Number(p.current_stock || 0), 0);
+      const loadedPurchases = snapshot.purchases?.length || 0;
+      if (loadedProducts === 0) throw new Error('No se cargaron productos desde Supabase. No se usará el stock local como reemplazo.');
+      console.info('StayClean central cargado:', {productos:loadedProducts,stock:loadedStock,compras:loadedPurchases});
       // Mantener en memoria, sin escribir ni sobrescribir el respaldo local.
       db.getTable = name => structuredClone(snapshot[name] ?? []);
       db.saveTable = () => { throw new Error('Operación local bloqueada: usá la transacción central autorizada'); };
@@ -412,7 +417,7 @@ async function bootCentralReadOnly() {
       app.init();
       const banner = document.createElement('div');
       banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9000;background:#fef3c7;color:#78350f;padding:9px 14px;text-align:center;font:600 12px system-ui';
-      banner.textContent = 'PRUEBA SUPABASE · Solo se permiten conteos de stock confirmados; ventas y compras deshabilitadas';
+      banner.textContent = `SUPABASE · ${loadedProducts} productos · ${loadedStock} unidades · ${loadedPurchases} compras · Ventas y compras deshabilitadas`;
       const exit = document.createElement('button');
       exit.textContent = 'Salir';
       exit.style.cssText = 'margin-left:16px;text-decoration:underline';
