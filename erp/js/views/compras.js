@@ -1,3 +1,8 @@
+import { db } from '../db.js';
+import { Formatter, PackagingEngine, LogisticsCostDistributor } from '../models.js';
+import { OcrFacturasView } from './ocr_facturas.js';
+let filterSupplierId = '';
+
 export const ComprasView = {
   render(container, params = {}) {
     window.comprasModule = this;
