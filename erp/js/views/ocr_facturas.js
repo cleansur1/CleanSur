@@ -702,6 +702,12 @@ export const OcrFacturasView = {
           </div>
         </div>
       </div>
+      ${this.ocrRequiresReview && this.ocrRawText ? `
+        <details class="mt-4 p-4 rounded-xl border border-amber-300 bg-amber-50">
+          <summary class="font-bold text-amber-900 cursor-pointer">Lectura incompleta — ver texto extraído del documento</summary>
+          <p class="text-sm mt-2 text-amber-900">No se identificaron los renglones. No confirmes la compra. Podés copiar el texto para revisar el formato del proveedor.</p>
+          <textarea readonly class="w-full mt-2 p-3 border rounded-lg text-xs" rows="12">${this.ocrRawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        </details>` : ''}
     `;
   },
 
