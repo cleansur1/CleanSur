@@ -411,7 +411,13 @@ async function bootCentralReadOnly() {
       document.addEventListener('click', e => {
         if (e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link')) return;
         const control = e.target.closest('button, input[type=submit], a[onclick], [role=button]');
-        if (control) { e.preventDefault(); e.stopImmediatePropagation(); alert('Vista de prueba: las operaciones están deshabilitadas.'); }
+        if (control) {
+          const handler = control.getAttribute('onclick') || '';
+          const safeNavigation = /window\\.app\\.navigate\\s*\\(/.test(handler);
+          if (safeNavigation) return;
+          e.preventDefault(); e.stopImmediatePropagation();
+          alert('Vista de prueba: las operaciones están deshabilitadas.');
+        }
       }, true);
       document.addEventListener('submit', e => { e.preventDefault(); e.stopImmediatePropagation(); }, true);
     } catch (err) {
