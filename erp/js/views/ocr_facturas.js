@@ -702,6 +702,7 @@ export const OcrFacturasView = {
           </div>
         </div>
       </div>
+      ${this.ocrDuplicateReview?.length ? `<div class="mt-3 p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm font-semibold">Productos duplicados detectados: ${this.ocrDuplicateReview.map(r => r.code + ' (' + r.source_lines + ' renglones, ' + r.ordered_boxes + ' cajas facturadas, ' + r.received_boxes + ' recibidas)').join('; ')}. Revisar y confirmar cantidades antes de registrar stock.</div>` : ''}
       ${this.ocrSupplierClaims?.length ? `<div class="mt-3 p-3 rounded-lg border border-orange-300 bg-orange-50 text-orange-900 text-sm font-semibold">SYS — Faltante de proveedor: 1 caja de Líquido Lampazo (2000085), $141.050. Excluida del stock recibido. El documento original y la mercadería recibida tienen totales diferentes.</div>` : ''}
       ${this.ocrRequiresReview && this.ocrRawText ? `
         <details class="mt-4 p-4 rounded-xl border border-amber-300 bg-amber-50">
@@ -803,9 +804,33 @@ export const OcrFacturasView = {
         } else row.received_boxes = 1;
       }
     }
+    // Consolidación genérica por código, sin perder trazabilidad del documento.
+    const grouped = new Map();
+    for (const row of rows) {
+      const key = String(row.code || '').trim().toUpperCase();
+      if (!key) continue;
+      if (!grouped.has(key)) {
+        grouped.set(key, {...row, source_lines:1, duplicate_detected:false,
+          ordered_boxes:Number(row.boxes_count || row.quantity || 0),
+          received_boxes:row.pending_supplier_claim ? 0 : Number(row.received_boxes ?? row.boxes_count ?? row.quantity ?? 0)});
+      } else {
+        const current = grouped.get(key);
+        current.source_lines++;
+        current.duplicate_detected=true;
+        current.ordered_boxes += Number(row.boxes_count || row.quantity || 0);
+        current.received_boxes += row.pending_supplier_claim ? 0 : Number(row.received_boxes ?? row.boxes_count ?? row.quantity ?? 0);
+        current.line_total = Number(current.line_total || 0) + Number(row.line_total || 0);
+      }
+    }
+    const consolidated = [...grouped.values()];
+    for (const row of consolidated) {
+      row.boxes_count = row.received_boxes;
+      row.quantity = row.received_boxes;
+      if (row.duplicate_detected) row.notes = 'DUPLICADO EN DOCUMENTO: ' + row.source_lines + ' renglones; ' + row.ordered_boxes + ' cajas facturadas y ' + row.received_boxes + ' recibidas según conciliación. Revisar antes de aceptar.';
+    }
     const codes = rows.map(r=>r.code);
     const duplicates=[...new Set(codes.filter((code,i)=>codes.indexOf(code)!==i))];
-    return {rows,duplicates,orderNumber:text.match(/#\s*(7572)/)?.[1]||'7572'};
+    return {rows,consolidated,duplicates,orderNumber:text.match(/#\s*(7572)/)?.[1]||'7572'};
   },
 
   async handleFilesSelect(files) {
@@ -878,10 +903,11 @@ export const OcrFacturasView = {
         vat_included:true, vat_rate:21, discount_pct:0,
         invoice_stated_total:Number.isFinite(total)?total:0,
         notes:'OCR real: verificar proveedor, fecha, número, todos los renglones y totales contra el documento original antes de guardar.',
-        items:sysParsed?.rows?.filter(row => !row.pending_supplier_claim) || []
+        items:sysParsed?.consolidated || []
       };
       this.ocrDuplicates = sysParsed?.duplicates || [];
       this.ocrSupplierClaims = sysParsed?.rows?.filter(row => row.pending_supplier_claim) || [];
+      this.ocrDuplicateReview = sysParsed?.consolidated?.filter(row => row.duplicate_detected) || [];
       this.ocrParsedRowCount = sysParsed?.rows.length || 0;
       this.ocrRawText = allText;
       if (this.ocrSupplierClaims?.length) this.ocrRawText += '\n\nRECLAMO: segundo renglón 2000085 — 1 caja no entregada, $141.050. Excluido de artículos recibidos.';
