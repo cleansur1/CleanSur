@@ -425,8 +425,8 @@ async function bootCentralReadOnly() {
         const control = e.target.closest('button, input[type=submit], a[onclick], [role=button]');
         if (control) {
           const handler = control.getAttribute('onclick') || '';
-          const safeNavigation = /window\\.app\\.navigate\\s*\\(/.test(handler);
-          const stockControl = app.currentRoute === 'stock' && /window\\.stockModule\\.(openAdjustModal|onAdjustProductChange|switchTab)\\s*\\(/.test(handler);
+          const safeNavigation = handler.includes('window.app.navigate(');
+          const stockControl = app.currentRoute === 'stock' && ['openAdjustModal(', 'onAdjustProductChange(', 'switchTab('].some(method => handler.includes('window.stockModule.' + method));
           if (safeNavigation || stockControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Vista de prueba: las operaciones están deshabilitadas.');
