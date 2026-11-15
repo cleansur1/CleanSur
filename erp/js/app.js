@@ -370,6 +370,7 @@ async function bootCentralReadOnly() {
   shield.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f1f5f9;display:grid;place-items:center;font-family:system-ui';
   shield.innerHTML = '<form id="central-form" style="background:white;border-radius:16px;padding:32px;max-width:410px;width:90%;box-shadow:0 10px 35px #0002"><h2 style="font-size:23px;font-weight:800;color:#0e3a6b">StayClean · ERP original</h2><p style="margin:12px 0;color:#475569">Vista central de prueba · Solo lectura</p><input name="email" type="email" autocomplete="username" required placeholder="Correo" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><input name="password" type="password" autocomplete="current-password" required placeholder="Contraseña" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><button style="background:#0e3a6b;color:white;padding:12px;border-radius:8px;width:100%;margin-top:12px">Ingresar</button><p id="central-error" role="alert" style="color:#b91c1c;margin-top:12px"></p></form>';
   document.body.append(shield);
+  document.getElementById('stayclean-boot-status')?.remove();
   document.getElementById('central-form').addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -381,9 +382,15 @@ async function bootCentralReadOnly() {
       await signInAdmin(form.elements.email.value, form.elements.password.value);
       const names = [...Object.keys(centralTables),'arca_config','arca_invoices','seasons','users','cost_history'];
       const values = await Promise.all(names.map(async name => {
-        const rows = await readCentral(centralTables[name] || name, {order:'id.asc',limit:10000});
-        if (rows.length >= 10000) throw new Error('Límite de registros alcanzado en '+name);
-        return rows;
+        try {
+          const rows = await readCentral(centralTables[name] || name, {order:'id.asc',limit:10000});
+          if (rows.length >= 10000) throw new Error('Límite de registros alcanzado en '+name);
+          return rows;
+        } catch (err) {
+          if (['products','purchases','sales','inventory_movements'].includes(name)) throw err;
+          console.warn('Tabla opcional no disponible:',name,err);
+          return [];
+        }
       }));
       const snapshot = Object.fromEntries(names.map((name,i)=>[name,values[i]]));
       // En el ERP original, ARCA es un objeto de configuración, no una lista.
@@ -436,6 +443,7 @@ function boot() {
   if (new URLSearchParams(location.search).get('central') === '1') {
     bootCentralReadOnly();
   } else {
+    document.getElementById('stayclean-boot-status')?.remove();
     app.init();
   }
 }
