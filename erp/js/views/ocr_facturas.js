@@ -702,6 +702,7 @@ export const OcrFacturasView = {
           </div>
         </div>
       </div>
+      ${this.ocrSupplierClaims?.length ? `<div class="mt-3 p-3 rounded-lg border border-orange-300 bg-orange-50 text-orange-900 text-sm font-semibold">SYS — Faltante de proveedor: 1 caja de Líquido Lampazo (2000085), $141.050. Excluida del stock recibido. El documento original y la mercadería recibida tienen totales diferentes.</div>` : ''}
       ${this.ocrRequiresReview && this.ocrRawText ? `
         <details class="mt-4 p-4 rounded-xl border border-amber-300 bg-amber-50">
           <summary class="font-bold text-amber-900 cursor-pointer">Lectura incompleta — ver texto extraído del documento</summary>
