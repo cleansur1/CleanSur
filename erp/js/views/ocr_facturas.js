@@ -1076,103 +1076,17 @@ export const OcrFacturasView = {
     }
   },
 
-  confirmExtractedPurchase() {
+  async confirmExtractedPurchase() {
+    // Prohibido guardar compras OCR en localStorage o aumentar stock local.
+    // El único destino autorizado es la transacción autenticada de Supabase.
     if (!this.extractedInvoice) return;
-    if (this.ocrRequiresReview || this.extractedInvoice.key === 'OCR_REAL_PENDIENTE_REVISION') {
-      notify('La lectura OCR todavía no identificó todos los artículos. No se puede registrar esta factura ni modificar stock.', 'error');
-      return;
-    }
     this.syncHeaderInputs();
-
-    const inv = this.extractedInvoice;
-    if (!inv.supplier_name || !inv.supplier_name.trim()) {
-      notify('Ingresá el nombre del proveedor antes de confirmar.', 'error');
+    const inv=this.extractedInvoice;
+    if (this.ocrRequiresReview || inv.key === 'OCR_REAL_PENDIENTE_REVISION') {
+      notify('El documento OCR está pendiente de revisión y conciliación. No se modificó el inventario central.', 'error');
       return;
     }
-
-    const validItems = (inv.items || []).filter(it => (it.description || it.commercial_name || '').trim() !== '' && (Number(it.boxes_count ?? it.quantity) > 0));
-    if (validItems.length === 0) {
-      notify('La factura debe tener al menos un artículo válido con cantidad mayor a 0.', 'error');
-      return;
-    }
-
-    const existingSupplier = db.findSupplierMatch({
-      name: inv.supplier_name,
-      cuit: inv.supplier_cuit,
-      email: inv.supplier_email
-    });
-    const cleanInvNum = String(inv.invoice_number || '').trim().toUpperCase();
-    const existingSameInvoice = existingSupplier && cleanInvNum
-      ? db.getPurchases().find(p => p.status !== 'ANULADA' && p.supplier_id === existingSupplier.id && String(p.invoice_number || '').trim().toUpperCase() === cleanInvNum)
-      : null;
-
-    if (existingSameInvoice) {
-      const existingCodes = new Set((existingSameInvoice.items || []).map(i => db.normalizeCode(i.code || i.sku)));
-      const allAlreadyInInvoice = validItems.every(i => existingCodes.has(db.normalizeCode(i.code)));
-      if (allAlreadyInInvoice) {
-        notify(`Esta hoja de la factura ${inv.invoice_number} (${inv.supplier_name}) ya fue cargada en el sistema.`, 'info');
-        if (window.app) window.app.navigate('compras');
-        return;
-      }
-    }
-
-    try {
-      const result = db.createPurchase({
-        supplier_name: inv.supplier_name.trim(),
-        supplier_cuit: inv.supplier_cuit,
-        supplier_address: inv.supplier_address,
-        supplier_phone: inv.supplier_phone,
-        supplier_email: inv.supplier_email,
-        invoice_number: inv.invoice_number || 'S/N',
-        invoice_type: inv.invoice_type || 'FACTURA B',
-        cae: inv.cae || '',
-        date: inv.date || new Date().toISOString().substring(0, 10),
-        payment_condition: inv.payment_condition || 'Contado',
-        discount_pct: Number(inv.discount_pct) || 0,
-        vat_included: inv.vat_included !== false,
-        vat_rate: inv.vat_included === false ? 21 : 0,
-        total_logistics: Number(inv.total_logistics) || 0,
-        invoice_stated_total: inv.invoice_stated_total,
-        reconciliation: PackagingEngine.reconcile({
-          statedTotal: inv.invoice_stated_total,
-          calculatedTotal: inv.invoice_stated_total // se calcula en db.createPurchase
-        }),
-        merge_into_existing: Boolean(existingSameInvoice),
-        notes: inv.notes || '',
-        items: validItems.map(it => {
-          const parsed = PackagingEngine.parse(it.description || it.commercial_name, it.boxes_count || it.quantity, it.unit_price, it.line_total);
-          return {
-            code: String(it.code || '').trim(),
-            product_name: String(it.commercial_name || parsed.cleanCommercialName || it.description).trim(),
-            commercial_name: String(it.commercial_name || parsed.cleanCommercialName || it.description).trim(),
-            invoice_description: String(it.description || it.rawDesc || '').trim(),
-            boxes_count: Number(it.boxes_count ?? it.quantity) || 1,
-            units_per_box: Number(it.units_per_box ?? parsed.unitsPerBox) || 1,
-            pricing_mode: it.pricing_mode || parsed.pricingMode || 'PER_BOX',
-            inventory_unit: it.inventory_unit || parsed.inventoryUnit || 'unidad',
-            quantity: Number(it.boxes_count ?? it.quantity) || 1,
-            unit_price: Number(it.unit_price) || 0,
-            unit_price_original: Number(it.unit_price) || 0,
-            discount_pct: Number(it.discount_pct ?? inv.discount_pct) || 0,
-            line_total: Number(it.line_total) || 0
-          };
-        })
-      });
-
-      const meta = result._meta || {};
-      notify(
-        `¡Factura ${result.invoice_number} de ${result.supplier_name} registrada! (${meta.newProductsCreated || 0} creados, ${meta.existingProductsUpdated || 0} sumados al stock en unidades vendibles)`,
-        'success'
-      );
-
-      this.extractedInvoice = null;
-      if (window.app) {
-        window.app.navigate('compras');
-      }
-    } catch (err) {
-      console.error(err);
-      notify(`Error al guardar la factura: ${err.message}`, 'error');
-    }
+    notify('Recepción central pendiente de habilitación: falta validar usuario autorizado, códigos de proveedor, cantidades recibidas y costos contra Supabase. No se modificó stock.', 'error');
   },
 
   loadAllTodayInvoicesBatch() {
