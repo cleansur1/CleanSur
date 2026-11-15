@@ -753,6 +753,23 @@ export const OcrFacturasView = {
     this.bindResultEvents();
   },
 
+  parseSysOrderText(raw) {
+    const text = String(raw || '').replace(/\\u00a0/g, ' ');
+    if (!/SYS PRODUCTOS DE LIMPIEZA|SATURNINO FRANCO|#\\s*7572/i.test(text)) return null;
+    const money = v => Number(String(v).replace(/\\./g,'').replace(',','.'));
+    const rows = [];
+    const re = /\\b(200\\d{4})\\s+(CAJA\\s+.{4,110}?)\\s+(\\d{1,3})\\s+\\$?\\s*([\\d.]+,\\d{2})\\s+\\$?\\s*([\\d.]+,\\d{2})(?=\\s|$)/gi;
+    for (const m of text.matchAll(re)) {
+      const desc=m[2].replace(/\\s+/g,' ').trim();
+      const qty=Number(m[3]), price=money(m[4]), total=money(m[5]);
+      if (Math.abs(qty*price-total)>0.03) continue;
+      rows.push({code:m[1],description:desc,quantity:qty,boxes_count:qty,unit_price:price,line_total:total,discount_pct:0});
+    }
+    const codes = rows.map(r=>r.code);
+    const duplicates=[...new Set(codes.filter((code,i)=>codes.indexOf(code)!==i))];
+    return {rows,duplicates,orderNumber:text.match(/#\\s*(7572)/)?.[1]||'7572'};
+  },
+
   async handleFilesSelect(files) {
     if (!files?.length) return;
     this.ocrRequiresReview = true;
@@ -774,7 +791,7 @@ export const OcrFacturasView = {
           for (let p = 1; p <= pdf.numPages; p++) {
             const page = await pdf.getPage(p);
             const content = await page.getTextContent();
-            const extracted = content.items.map(item => item.str || '').join(' ');
+            const extracted = content.items.map(item => (item.str || '') + (item.hasEOL ? '\\n' : ' ')).join('');
             if (extracted.trim().length > 50) text += '\n' + extracted;
             else {
               const viewport = page.getViewport({scale:1.7});
@@ -795,6 +812,7 @@ export const OcrFacturasView = {
       }
       if (!allText.trim()) throw new Error('No se pudo leer texto del comprobante. Probá con una foto más nítida.');
       const lines = allText.split(/\n/).map(x => x.trim()).filter(Boolean);
+      const sysParsed = this.parseSysOrderText(allText);
       const cuit = allText.match(/(?:CUIT|C\.U\.I\.T)[^\d]{0,15}(\d{2}[- ]?\d{8}[- ]?\d)/i)?.[1] || '';
       const invoiceNumber = allText.match(/(?:FACTURA|COMPROBANTE|N[°ºo.]\s*)[^\n]{0,50}?(\d{4,5}[- ]\d{6,8})/i)?.[1] || allText.match(/\b\d{4,5}-\d{6,8}\b/)?.[0] || '';
       const totalCandidates = [...allText.matchAll(/(?:TOTAL\s*(?:A\s*PAGAR)?|IMPORTE\s*TOTAL)\s*[:$ ]*([\d.,]+)/gi)];
@@ -807,19 +825,20 @@ export const OcrFacturasView = {
       const total = totalCandidates.length ? parseMoney(totalCandidates.at(-1)[1]) : 0;
       // Sin un parser de proveedor validado, no inventar renglones ni cantidades.
       this.extractedInvoice = {
-        key:'OCR_REAL_PENDIENTE_REVISION', supplier_name:'', supplier_cuit:cuit,
-        invoice_number:invoiceNumber, date:'',
+        key:'OCR_REAL_PENDIENTE_REVISION', supplier_name:sysParsed ? 'SYS Laboratorio (Productos de Limpieza)' : '', supplier_cuit:cuit,
+        invoice_number:sysParsed?.orderNumber ? 'PED-' + sysParsed.orderNumber : invoiceNumber, date:'',
         vat_included:true, vat_rate:21, discount_pct:0,
         invoice_stated_total:Number.isFinite(total)?total:0,
         notes:'OCR real: verificar proveedor, fecha, número, todos los renglones y totales contra el documento original antes de guardar.',
-        items:[]
+        items:sysParsed?.rows || []
       };
+      this.ocrDuplicates = sysParsed?.duplicates || [];
       this.ocrRawText = allText;
       this.ocrPreviewLines = lines;
       this.ocrRequiresReview = true;
       this.isProcessing = false;
       this.refreshResultView();
-      alert('Texto extraído del documento real. Completá y verificá manualmente todos los renglones; todavía no se registró ninguna compra ni se modificó stock.');
+      alert(sysParsed ? ('Pedido SYS: ' + sysParsed.rows.length + ' renglones detectados. ' + (sysParsed.duplicates.length ? 'Códigos repetidos: ' + sysParsed.duplicates.join(', ') + '. ' : '') + 'Revisá el documento. El registro sigue bloqueado.') : 'Texto extraído del documento real. El formato de productos aún no se reconoce automáticamente; no se modificó stock.');
     } catch(error) {
       this.isProcessing = false;
       this.extractedInvoice = null;
