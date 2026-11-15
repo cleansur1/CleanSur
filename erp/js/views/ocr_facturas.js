@@ -765,6 +765,14 @@ export const OcrFacturasView = {
       if (Math.abs(qty*price-total)>0.03) continue;
       rows.push({code:m[1],description:desc,quantity:qty,boxes_count:qty,unit_price:price,line_total:total,discount_pct:0});
     }
+    if (!rows.length) {
+      const rawOrder = /\b(200\d{4})\s+\$\s*([\d.]+,\d{2})\s+\$\s*([\d.]+,\d{2})\s+(\d{1,3})\s+(CAJA\s+[^\n]+)/gi;
+      for (const m of text.matchAll(rawOrder)) {
+        const qty=Number(m[4]), price=money(m[2]), total=money(m[3]);
+        if (Math.abs(qty*price-total)>0.03) continue;
+        rows.push({code:m[1],description:m[5].trim(),quantity:qty,boxes_count:qty,unit_price:price,line_total:total,discount_pct:0});
+      }
+    }
     const codes = rows.map(r=>r.code);
     const duplicates=[...new Set(codes.filter((code,i)=>codes.indexOf(code)!==i))];
     return {rows,duplicates,orderNumber:text.match(/#\s*(7572)/)?.[1]||'7572'};
@@ -791,7 +799,7 @@ export const OcrFacturasView = {
           for (let p = 1; p <= pdf.numPages; p++) {
             const page = await pdf.getPage(p);
             const content = await page.getTextContent();
-            const extracted = content.items.map(item => (item.str || '') + (item.hasEOL ? '\\n' : ' ')).join('');
+            const extracted = content.items.map(item => (item.str || '') + (item.hasEOL ? '\n' : ' ')).join('');
             if (extracted.trim().length > 50) text += '\n' + extracted;
             else {
               const viewport = page.getViewport({scale:1.7});
