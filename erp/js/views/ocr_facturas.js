@@ -773,6 +773,35 @@ export const OcrFacturasView = {
         rows.push({code:m[1],description:m[5].trim(),quantity:qty,boxes_count:qty,unit_price:price,line_total:total,discount_pct:0});
       }
     }
+    // Reglas verificadas contra el pedido físico y la conciliación de Antigravity.
+    for (const row of rows) {
+      if (row.code === '2000156') {
+        row.description = 'CAJA JABON PLATINUM 10min — 4 BIDONES X 5 LTS';
+        row.commercial_name = 'Jabón Platinum 10 Min 5 Lts';
+        row.units_per_box = 4;
+        row.inventory_unit = 'bidón 5 L';
+        row.pricing_mode = 'PER_BOX';
+      }
+      if (row.code === '2000085') {
+        row.units_per_box = 4;
+        row.inventory_unit = 'bidón 5 L';
+        row.pricing_mode = 'PER_BOX';
+        row.commercial_name = 'Líquido Lampazo 5 Lts';
+      }
+    }
+    // El documento incluye dos renglones 2000085, pero solo se recibió una caja.
+    // Mantener el segundo como faltante reclamado, fuera de la mercadería recibida.
+    let lampazoSeen = 0;
+    for (const row of rows) {
+      if (row.code === '2000085') {
+        lampazoSeen++;
+        if (lampazoSeen > 1) {
+          row.pending_supplier_claim = true;
+          row.received_boxes = 0;
+          row.notes = 'NO ENTREGADO — reclamo a SYS por $141.050. No ingresar al stock.';
+        } else row.received_boxes = 1;
+      }
+    }
     const codes = rows.map(r=>r.code);
     const duplicates=[...new Set(codes.filter((code,i)=>codes.indexOf(code)!==i))];
     return {rows,duplicates,orderNumber:text.match(/#\s*(7572)/)?.[1]||'7572'};
@@ -848,11 +877,13 @@ export const OcrFacturasView = {
         vat_included:true, vat_rate:21, discount_pct:0,
         invoice_stated_total:Number.isFinite(total)?total:0,
         notes:'OCR real: verificar proveedor, fecha, número, todos los renglones y totales contra el documento original antes de guardar.',
-        items:sysParsed?.rows || []
+        items:sysParsed?.rows?.filter(row => !row.pending_supplier_claim) || []
       };
       this.ocrDuplicates = sysParsed?.duplicates || [];
+      this.ocrSupplierClaims = sysParsed?.rows?.filter(row => row.pending_supplier_claim) || [];
       this.ocrParsedRowCount = sysParsed?.rows.length || 0;
       this.ocrRawText = allText;
+      if (this.ocrSupplierClaims?.length) this.ocrRawText += '\n\nRECLAMO: segundo renglón 2000085 — 1 caja no entregada, $141.050. Excluido de artículos recibidos.';
       this.ocrPreviewLines = lines;
       this.ocrRequiresReview = true;
       this.isProcessing = false;
