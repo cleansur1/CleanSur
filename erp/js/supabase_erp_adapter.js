@@ -43,3 +43,17 @@ export async function updateCentralSalePrice(productId, salePrice) {
   if(!response.ok) throw new Error(data.message || 'No se pudo modificar el precio');
   return data;
 }
+
+export async function adjustCentralStock(productId, delta, reason, requestId=crypto.randomUUID()) {
+  const session=getAdminSession();
+  if(!session?.access_token) throw new Error('Debés iniciar sesión en StayClean');
+  if(!Number.isInteger(Number(delta)) || Number(delta)===0) throw new Error('Cantidad entera distinta de cero requerida');
+  if(String(reason||'').trim().length<8) throw new Error('Indicá un motivo de al menos 8 caracteres');
+  const response=await fetch(`${STAYCLEAN_SUPABASE_URL}/rest/v1/rpc/stayclean_staff_adjust_stock`,{
+    method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({p_product_id:productId,p_delta:Number(delta),p_reason:reason,p_request_id:requestId})
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(data.message||'No se pudo ajustar el stock');
+  return data;
+}
