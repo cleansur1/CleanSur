@@ -749,7 +749,7 @@ export const OcrFacturasView = {
 
   async handleFilesSelect(files) {
     if (!files?.length) return;
-    const allowed = files.every(f => f.type === 'application/pdf' || f.type.startsWith('image/') || /\\.(pdf|png|jpe?g|webp)$/i.test(f.name));
+    const allowed = files.every(f => f.type === 'application/pdf' || f.type.startsWith('image/') || /\.(pdf|png|jpe?g|webp)$/i.test(f.name));
     if (!allowed) { alert('Solo se admiten imágenes y PDF.'); return; }
     this.uploadedFileName = files.map(f => f.name).join(', ');
     this.extractedInvoice = null;
@@ -760,7 +760,7 @@ export const OcrFacturasView = {
       let allText = '';
       for (const file of files) {
         let text = '';
-        if (file.type === 'application/pdf' || /\\.pdf$/i.test(file.name)) {
+        if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
           if (!window.pdfjsLib) throw new Error('No se cargó PDF.js. Actualizá la página.');
           const pdf = await window.pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
           if (pdf.numPages > 25) throw new Error('PDF demasiado largo: máximo 25 páginas.');
@@ -768,7 +768,7 @@ export const OcrFacturasView = {
             const page = await pdf.getPage(p);
             const content = await page.getTextContent();
             const extracted = content.items.map(item => item.str || '').join(' ');
-            if (extracted.trim().length > 50) text += '\\n' + extracted;
+            if (extracted.trim().length > 50) text += '\n' + extracted;
             else {
               const viewport = page.getViewport({scale:1.7});
               const canvas = document.createElement('canvas');
@@ -776,7 +776,7 @@ export const OcrFacturasView = {
               await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
               if (!window.Tesseract) throw new Error('No se cargó Tesseract OCR.');
               const result = await window.Tesseract.recognize(canvas,'spa+eng');
-              text += '\\n' + (result.data?.text || '');
+              text += '\n' + (result.data?.text || '');
             }
           }
         } else {
@@ -784,16 +784,16 @@ export const OcrFacturasView = {
           const result = await window.Tesseract.recognize(file,'spa+eng');
           text = result.data?.text || '';
         }
-        allText += '\\n' + text;
+        allText += '\n' + text;
       }
       if (!allText.trim()) throw new Error('No se pudo leer texto del comprobante. Probá con una foto más nítida.');
-      const lines = allText.split(/\\n/).map(x => x.trim()).filter(Boolean);
-      const cuit = allText.match(/(?:CUIT|C\\.U\\.I\\.T)[^\\d]{0,15}(\\d{2}[- ]?\\d{8}[- ]?\\d)/i)?.[1] || '';
-      const invoiceNumber = allText.match(/(?:FACTURA|COMPROBANTE|N[°ºo.]\\s*)[^\\n]{0,50}?(\\d{4,5}[- ]\\d{6,8})/i)?.[1] || allText.match(/\\b\\d{4,5}-\\d{6,8}\\b/)?.[0] || '';
-      const totalCandidates = [...allText.matchAll(/(?:TOTAL\\s*(?:A\\s*PAGAR)?|IMPORTE\\s*TOTAL)\\s*[:$ ]*([\\d.,]+)/gi)];
+      const lines = allText.split(/\n/).map(x => x.trim()).filter(Boolean);
+      const cuit = allText.match(/(?:CUIT|C\.U\.I\.T)[^\d]{0,15}(\d{2}[- ]?\d{8}[- ]?\d)/i)?.[1] || '';
+      const invoiceNumber = allText.match(/(?:FACTURA|COMPROBANTE|N[°ºo.]\s*)[^\n]{0,50}?(\d{4,5}[- ]\d{6,8})/i)?.[1] || allText.match(/\b\d{4,5}-\d{6,8}\b/)?.[0] || '';
+      const totalCandidates = [...allText.matchAll(/(?:TOTAL\s*(?:A\s*PAGAR)?|IMPORTE\s*TOTAL)\s*[:$ ]*([\d.,]+)/gi)];
       const parseMoney = raw => {
-        const str = String(raw || '').replace(/[^\\d,.]/g,'');
-        if (str.includes(',') && str.includes('.')) return Number(str.replace(/\\./g,'').replace(',','.'));
+        const str = String(raw || '').replace(/[^\d,.]/g,'');
+        if (str.includes(',') && str.includes('.')) return Number(str.replace(/\./g,'').replace(',','.'));
         if (str.includes(',')) return Number(str.replace(',','.'));
         return Number(str);
       };
