@@ -57,3 +57,17 @@ export async function adjustCentralStock(productId, delta, reason, requestId=cry
   if(!response.ok) throw new Error(data.message||'No se pudo ajustar el stock');
   return data;
 }
+
+export async function setCentralStock(productId, expectedStock, newStock, reason, requestId=crypto.randomUUID()) {
+  const session=getAdminSession();
+  if(!session?.access_token) throw new Error('Debés iniciar sesión en StayClean');
+  if(!Number.isInteger(Number(expectedStock)) || !Number.isInteger(Number(newStock)) || Number(newStock)<0) throw new Error('El conteo debe ser un número entero no negativo');
+  if(String(reason||'').trim().length<8) throw new Error('Indicá un motivo de al menos 8 caracteres');
+  const response=await fetch(`${STAYCLEAN_SUPABASE_URL}/rest/v1/rpc/stayclean_staff_set_stock`,{
+    method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({p_product_id:productId,p_expected_stock:Number(expectedStock),p_new_stock:Number(newStock),p_reason:reason,p_request_id:requestId})
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(data.message||'No se pudo registrar el conteo');
+  return data;
+}
