@@ -692,9 +692,9 @@ export const OcrFacturasView = {
               <span>El inventario aumentará en <strong>unidades de venta individual</strong> (bidones, botellas, unidades).</span>
             </div>
             <div class="flex items-center gap-3">
-              <button id="btn-confirm-ocr-purchase"
+              <button id="btn-confirm-ocr-purchase" ${this.ocrRequiresReview || !inv.items?.length ? 'disabled title="Lectura incompleta: falta identificar y validar los productos"' : ''}
                 
-                class="px-5 py-2.5 ${reconciliation.status === 'DIFERENCIA' ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'} font-black rounded-xl text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2">
+                class="px-5 py-2.5 ${this.ocrRequiresReview || !inv.items?.length ? 'opacity-40 cursor-not-allowed ' : ''}${reconciliation.status === 'DIFERENCIA' ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'} font-black rounded-xl text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2">
                 <i data-lucide="${reconciliation.status === 'DIFERENCIA' ? 'alert-triangle' : 'check-circle'}" class="w-4 h-4"></i>
                 ${reconciliation.status === 'DIFERENCIA' ? 'Confirmar compra con diferencia e ingresar stock' : 'Confirmar compra e ingresar stock'}
               </button>
@@ -749,6 +749,7 @@ export const OcrFacturasView = {
 
   async handleFilesSelect(files) {
     if (!files?.length) return;
+    this.ocrRequiresReview = true;
     const allowed = files.every(f => f.type === 'application/pdf' || f.type.startsWith('image/') || /\.(pdf|png|jpe?g|webp)$/i.test(f.name));
     if (!allowed) { alert('Solo se admiten imágenes y PDF.'); return; }
     this.uploadedFileName = files.map(f => f.name).join(', ');
@@ -801,13 +802,14 @@ export const OcrFacturasView = {
       // Sin un parser de proveedor validado, no inventar renglones ni cantidades.
       this.extractedInvoice = {
         key:'OCR_REAL_PENDIENTE_REVISION', supplier_name:'', supplier_cuit:cuit,
-        invoice_number:invoiceNumber, date:new Date().toISOString().slice(0,10),
+        invoice_number:invoiceNumber, date:'',
         vat_included:true, vat_rate:21, discount_pct:0,
         invoice_stated_total:Number.isFinite(total)?total:0,
         notes:'OCR real: verificar proveedor, fecha, número, todos los renglones y totales contra el documento original antes de guardar.',
         items:[]
       };
       this.ocrRawText = allText;
+      this.ocrPreviewLines = lines;
       this.ocrRequiresReview = true;
       this.isProcessing = false;
       this.refreshResultView();
@@ -974,6 +976,10 @@ export const OcrFacturasView = {
 
   confirmExtractedPurchase() {
     if (!this.extractedInvoice) return;
+    if (this.ocrRequiresReview || this.extractedInvoice.key === 'OCR_REAL_PENDIENTE_REVISION') {
+      notify('La lectura OCR todavía no identificó todos los artículos. No se puede registrar esta factura ni modificar stock.', 'error');
+      return;
+    }
     this.syncHeaderInputs();
 
     const inv = this.extractedInvoice;
