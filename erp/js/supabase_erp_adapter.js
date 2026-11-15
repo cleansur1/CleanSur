@@ -84,3 +84,15 @@ export async function createCentralSale(sale, requestId=crypto.randomUUID()) {
   if(!response.ok) throw new Error(data.message||'No se pudo registrar la venta');
   return data;
 }
+
+export async function receiveCentralPurchase(purchase, requestId=crypto.randomUUID()) {
+  const session=getAdminSession();
+  if(!session?.access_token) throw new Error('Iniciá sesión en StayClean');
+  const response=await fetch(`${STAYCLEAN_SUPABASE_URL}/rest/v1/rpc/stayclean_staff_receive_purchase`,{
+    method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({p_purchase:{...purchase,request_id:requestId}})
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(data.message||'No se pudo recibir la compra');
+  return data;
+}
