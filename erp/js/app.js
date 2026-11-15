@@ -393,7 +393,8 @@ async function bootCentralReadOnly() {
       const centralDashboard = await readCentralDashboard();
       // Mantener en memoria, sin escribir ni sobrescribir el respaldo local.
       db.getTable = name => structuredClone(snapshot[name] ?? []);
-      db.saveTable = () => { throw new Error('Solo lectura: operación no habilitada en Supabase'); };
+      db.saveTable = () => { throw new Error('Operación local bloqueada: usá la transacción central autorizada'); };
+      db.centralSetTable = (name, rows) => { snapshot[name] = structuredClone(rows); };
       db.logAudit = () => {};
       db.getCurrentUser = () => ({id:'central-staff',name:'Personal StayClean',role:'ADMINISTRADOR',permissions:new Proxy({}, {get:()=>true})});
       db.hasPermission = () => true;
@@ -404,7 +405,7 @@ async function bootCentralReadOnly() {
       app.init();
       const banner = document.createElement('div');
       banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9000;background:#fef3c7;color:#78350f;padding:9px 14px;text-align:center;font:600 12px system-ui';
-      banner.textContent = 'PRUEBA SUPABASE · SOLO LECTURA · No registrar ventas, compras ni modificaciones en esta versión';
+      banner.textContent = 'PRUEBA SUPABASE · Solo se permiten conteos de stock confirmados; ventas y compras deshabilitadas';
       const exit = document.createElement('button');
       exit.textContent = 'Salir';
       exit.style.cssText = 'margin-left:16px;text-decoration:underline';
@@ -418,12 +419,13 @@ async function bootCentralReadOnly() {
         if (control) {
           const handler = control.getAttribute('onclick') || '';
           const safeNavigation = /window\\.app\\.navigate\\s*\\(/.test(handler);
-          if (safeNavigation) return;
+          const stockControl = app.currentRoute === 'stock' && /window\\.stockModule\\.(openAdjustModal|onAdjustProductChange|switchTab)\\s*\\(/.test(handler);
+          if (safeNavigation || stockControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Vista de prueba: las operaciones están deshabilitadas.');
         }
       }, true);
-      document.addEventListener('submit', e => { e.preventDefault(); e.stopImmediatePropagation(); }, true);
+      document.addEventListener('submit', e => { if (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
     } catch (err) {
       error.textContent = err.message || 'No se pudo iniciar la sesión';
       await signOutAdmin().catch(()=>{});
