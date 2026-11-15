@@ -1,0 +1,31 @@
+{
+  "name": "StayClean ERP - Distribuidora Limpieza y Descartables",
+  "short_name": "StayClean",
+  "description": "Sistema de gestión ERP de insumos descartables, químicos y hotelería en Caviahue - StayClean",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#E9F4FB",
+  "theme_color": "#0E3A6B",
+  "icons": [
+    {
+      "src": "assets/stayclean-logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"]
+}
