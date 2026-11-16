@@ -810,7 +810,7 @@ class TiendaStandaloneApp {
         customer_name: prof.name,
         customer_phone: prof.phone,
         customer_email: prof.email || '',
-        delivery_address: (prof.address || '') + (prof.zone ? ' (' + prof.zone + ')' : ''),
+        delivery_address: prof.address || '',
         delivery_city: city,
         items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
       });
