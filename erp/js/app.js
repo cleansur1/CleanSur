@@ -71,7 +71,7 @@ class App {
     this.setupPWA();
     this.updateUserHeader();
     this.applyRolePermissions();
-    this.navigate('dashboard');
+    this.navigate(this.centralReadOnly ? 'productos' : 'dashboard');
 
     // Manejar atajo de teclado Ctrl+K
     window.addEventListener('keydown', (e) => {
@@ -368,7 +368,7 @@ async function bootCentralReadOnly() {
   const shield = document.createElement('div');
   shield.id = 'central-access';
   shield.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f1f5f9;display:grid;place-items:center;font-family:system-ui';
-  shield.innerHTML = '<form id="central-form" style="background:white;border-radius:16px;padding:32px;max-width:410px;width:90%;box-shadow:0 10px 35px #0002"><h2 style="font-size:23px;font-weight:800;color:#0e3a6b">StayClean · ERP original</h2><p style="margin:12px 0;color:#475569">Vista central de prueba · Solo lectura</p><input name="email" type="email" autocomplete="username" required placeholder="Correo" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><input name="password" type="password" autocomplete="current-password" required placeholder="Contraseña" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><button style="background:#0e3a6b;color:white;padding:12px;border-radius:8px;width:100%;margin-top:12px">Ingresar</button><p id="central-error" role="alert" style="color:#b91c1c;margin-top:12px"></p></form>';
+  shield.innerHTML = '<form id="central-form" style="background:white;border-radius:16px;padding:32px;max-width:410px;width:90%;box-shadow:0 10px 35px #0002"><h2 style="font-size:23px;font-weight:800;color:#0e3a6b">StayClean · ERP original</h2><p style="margin:12px 0;color:#475569">Inventario central de Supabase · 39 productos registrados · Ingresá para verlos</p><input name="email" type="email" autocomplete="username" required placeholder="Correo" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><input name="password" type="password" autocomplete="current-password" required placeholder="Contraseña" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><button style="background:#0e3a6b;color:white;padding:12px;border-radius:8px;width:100%;margin-top:12px">Ingresar</button><p id="central-error" role="alert" style="color:#b91c1c;margin-top:12px"></p></form>';
   document.body.append(shield);
   document.getElementById('stayclean-boot-status')?.remove();
   document.getElementById('central-form').addEventListener('submit', async event => {
@@ -417,7 +417,7 @@ async function bootCentralReadOnly() {
       app.init();
       const banner = document.createElement('div');
       banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9000;background:#fef3c7;color:#78350f;padding:9px 14px;text-align:center;font:600 12px system-ui';
-      banner.textContent = `SUPABASE · ${loadedProducts} productos · ${loadedStock} unidades · ${loadedPurchases} compras · Ventas y compras deshabilitadas`;
+      banner.textContent = `SUPABASE · ${loadedProducts} productos · ${loadedStock} unidades · ${loadedPurchases} compras · Inventario central visible`;
       const exit = document.createElement('button');
       exit.textContent = 'Salir';
       exit.style.cssText = 'margin-left:16px;text-decoration:underline';
