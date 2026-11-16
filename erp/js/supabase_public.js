@@ -15,3 +15,9 @@ async function rpc(name, payload = {}) {
 
 export const staycleanPublicCatalog = () => rpc('stayclean_public_catalog');
 export const staycleanCreateOrder = order => rpc('create_web_order_with_stock_deduction', { p_order: order });
+
+export const staycleanStaffOrders = async (token) => {
+ if (!token) throw Error('Se requiere sesión de personal autorizado');
+ const response=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/stayclean_staff_orders',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}'});
+ const data=await response.json();if(!response.ok)throw Error(data.message||'Acceso no autorizado');return data;
+};
