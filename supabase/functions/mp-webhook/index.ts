@@ -66,7 +66,7 @@ Deno.serve(async (req: Request) => {
     const payment = mpOrder.transactions?.payments?.[0];
     const paidAmount = Number(mpOrder.total_paid_amount ?? payment?.paid_amount ?? 0);
     if (mpOrder.status === "processed" && mpOrder.status_detail === "accredited") {
-      const { error } = await admin.rpc("stayclean_finalize_mp_payment", {
+      const { data, error } = await admin.rpc("stayclean_finalize_mp_payment", {
         p_intent_id: intent.id,
         p_mp_order_id: mpOrder.id,
         p_mp_status: mpOrder.status,
