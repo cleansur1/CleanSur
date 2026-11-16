@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
     );
     if (!orderResponse.ok) return response(502, "could not verify Mercado Pago order");
     const mpOrder = await orderResponse.json();
-    if (mpOrder.live_mode !== false) return response(400, "unexpected live mode for test webhook");
+    if (mpOrder.live_mode === true) return response(400, "unexpected live mode for test webhook");
     const intentId = mpOrder.external_reference;
     if (!intentId) return response(200, "ignored: no external reference");
 
