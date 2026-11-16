@@ -1105,7 +1105,19 @@ export const OcrFacturasView = {
         if(seen.has(code))throw Error('SKU repetido '+code+'. Consolidá las filas y verificá las cantidades recibidas.');
         seen.add(code);
         const matches=lookup.products.filter(p=>normalize(p.sku)===code);
-        if(matches.length!==1)throw Error('El SKU '+code+' no tiene coincidencia única en Supabase.');
+        if(matches.length>1)throw Error('SKU duplicado en catálogo central: '+code);
+        let product=matches[0];
+        if(!product){
+          const name=String(it.description||it.name||'').trim();
+          if(name.length<3)throw Error('Producto nuevo '+code+': falta descripción verificable.');
+          if(!confirm('Producto nuevo '+code+': '+name+'. ¿Crear ficha SIN publicar en la tienda y con precio pendiente?'))return;
+          const unit=prompt('Unidad VENDIBLE del producto '+code+' (ej.: bidón 5L, pack x3, unidad):','unidad');
+          if(!unit)return;
+          const factorText=prompt('Cantidad de unidades BASE que representa una unidad vendible (entero positivo):','1');
+          const factor=Number(factorText);
+          if(!Number.isInteger(factor)||factor<=0)throw Error('Factor de conversión inválido');
+          product=await rpc('stayclean_staff_register_product',{p_product:{sku:it.code,name,sale_unit:unit,sale_to_base_factor:factor}});
+        }
         const boxes=Number(it.received_boxes ?? it.boxes_count ?? it.quantity);
         const units=Number(it.units_per_box??1);
         const quantity=boxes*units;
@@ -1113,7 +1125,7 @@ export const OcrFacturasView = {
         const total=Number(it.line_total||0);
         const cost=total/quantity;
         if(!Number.isFinite(cost)||cost<0)throw Error('Costo inválido en '+code);
-        items.push({product_id:matches[0].id,quantity_base:quantity,unit_cost:cost});
+        items.push({product_id:product.id,quantity_base:quantity,unit_cost:cost});
       }
       if(!items.length)throw Error('Factura sin productos válidos');
       const invoice=String(inv.invoice_number||'').trim();
