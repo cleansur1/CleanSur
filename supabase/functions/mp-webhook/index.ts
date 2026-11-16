@@ -36,8 +36,21 @@ Deno.serve(async (req: Request) => {
     const dataId = url.searchParams.get("data.id") ?? url.searchParams.get("id");
     const signature = req.headers.get("x-signature") ?? "";
     const requestId = req.headers.get("x-request-id") ?? "";
-    if (!dataId || !signature || !requestId) return response(400, "missing signature data");
+    if (!dataId || !signature || !requestId) {
+      console.warn("MP webhook rejected: missing signature fields", {
+        hasDataId: Boolean(dataId),
+        hasSignature: Boolean(signature),
+        hasRequestId: Boolean(requestId),
+      });
+      return response(400, "missing signature data");
+    }
     if (!await verifySignature(webhookSecret, signature, requestId, dataId)) {
+      console.warn("MP webhook rejected: signature mismatch", {
+        signatureHasTimestamp: /(?:^|,)\\s*ts=/.test(signature),
+        signatureHasV1: /(?:^|,)\\s*v1=/.test(signature),
+        requestIdPresent: Boolean(requestId),
+        dataIdPresent: Boolean(dataId),
+      });
       return response(401, "invalid signature");
     }
 
