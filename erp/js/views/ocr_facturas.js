@@ -1091,8 +1091,13 @@ export const OcrFacturasView = {
       const lookup=await rpc('stayclean_staff_purchase_lookup',{});
       if(!lookup?.products||!lookup?.suppliers)throw Error('No se pudo validar acceso de personal');
       const normalize=x=>String(x||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');
-      const supplier=lookup.suppliers.find(p=>normalize(p.name)===normalize(inv.supplier_name));
-      if(!supplier)throw Error('Proveedor sin coincidencia exacta en Supabase. Corregí el proveedor antes de registrar.');
+      let supplier=lookup.suppliers.find(p=>normalize(p.cuit)===normalize(inv.supplier_cuit)&&normalize(inv.supplier_cuit).length===11) || lookup.suppliers.find(p=>normalize(p.name)===normalize(inv.supplier_name));
+      if(!supplier){
+        const cuit=String(inv.supplier_cuit||'').replace(/\D/g,'');
+        if(cuit.length!==11)throw Error('Proveedor nuevo: revisá el CUIT de 11 dígitos en la factura.');
+        if(!confirm('Proveedor nuevo: '+inv.supplier_name+' (CUIT '+cuit+'). ¿Crear su ficha en Supabase?'))return;
+        supplier=await rpc('stayclean_staff_register_supplier',{p_supplier:{name:inv.supplier_name,cuit,address:inv.supplier_address||'',city:inv.supplier_city||''}});
+      }
       const items=[];const seen=new Set();
       for(const it of inv.items||[]){
         const code=normalize(it.code);
