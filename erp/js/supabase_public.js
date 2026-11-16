@@ -34,3 +34,29 @@ export const staycleanCustomerRpc=async(name,payload={})=>{const token=await sta
 export const staycleanCustomerProfile=profile=>staycleanCustomerRpc('stayclean_customer_profile',{p_profile:profile??null});
 export const staycleanCustomerOrders=()=>staycleanCustomerRpc('stayclean_customer_orders');
 export const staycleanAuthenticatedOrder=order=>staycleanCustomerRpc('create_web_order_with_stock_deduction',{p_order:order});
+
+export const staycleanCreateMpCheckout = async (requestId, items) => {
+  const token = await staycleanAuthToken();
+  if (!token) throw Error('Iniciá sesión con tu cuenta para pagar');
+  const response = await fetch(STAYCLEAN_SUPABASE_URL + '/functions/v1/create-mp-checkout', {
+    method: 'POST',
+    headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ request_id: requestId, items })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw Error(data.error || 'No se pudo iniciar el pago');
+  return data;
+};
+
+export const staycleanMpCheckoutStatus = async (requestId) => {
+  const token = await staycleanAuthToken();
+  if (!token) throw Error('Iniciá sesión nuevamente para consultar el pago');
+  const response = await fetch(STAYCLEAN_SUPABASE_URL + '/functions/v1/get-mp-checkout-status', {
+    method: 'POST',
+    headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ request_id: requestId })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw Error(data.error || 'No se pudo consultar el estado del pago');
+  return data;
+};
