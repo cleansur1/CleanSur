@@ -262,3 +262,89 @@ $$;
 
 revoke all on function public.stayclean_finalize_mp_payment(uuid,text,text,text,numeric) from public, anon, authenticated;
 grant execute on function public.stayclean_finalize_mp_payment(uuid,text,text,text,numeric) to service_role;
+
+
+-- Make the public catalog and staff POS respect temporary online stock reservations.
+create or replace function public.stayclean_public_catalog()
+returns table(
+  id text, sku varchar, name varchar, brand text, description text,
+  sale_unit text, presentation text, available_stock numeric, sale_price numeric, image_url text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p.id,p.sku,p.name,p.brand,p.description,p.sale_unit,p.presentation,
+    floor(greatest(p.current_stock - coalesce(r.reserved_base,0),0)/p.sale_to_base_factor),
+    p.sale_price,p.image_url
+  from public.products p
+  left join lateral (
+    select sum((line->>'quantity_base')::numeric) as reserved_base
+    from public.stayclean_mp_payment_intents i
+    cross join lateral jsonb_array_elements(i.items_snapshot) line
+    where i.status='pending' and i.expires_at>now()
+      and line->>'product_id'=p.id
+  ) r on true
+  where p.active is true and p.publish_online is true and p.sale_price>0
+  order by p.name;
+$$;
+
+create or replace function public.stayclean_staff_create_sale(p_sale jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_id text; v_item jsonb; v_product record; v_qty numeric;
+  v_sub numeric:=0; v_total numeric; v_discount numeric; v_items jsonb:='[]'::jsonb;
+  v_customer text; v_name text; v_payment text; v_date date; v_sale_number text;
+  v_balance numeric; v_existing record; v_result jsonb; v_reserved numeric;
+begin
+  if not public.stayclean_is_staff() then raise exception 'Acceso no autorizado' using errcode='42501'; end if;
+  v_id:=nullif(trim(p_sale->>'request_id'),'');
+  if v_id is null or length(v_id)>100 then raise exception 'Identificador requerido'; end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_id,0));
+  select id,total,items into v_existing from public.sales where id='pos-'||v_id;
+  if found then return jsonb_build_object('success',true,'sale_id',v_existing.id,'total',v_existing.total,'replayed',true); end if;
+  if jsonb_typeof(p_sale->'items')<>'array' or jsonb_array_length(p_sale->'items') not between 1 and 100 then raise exception 'Items inválidos'; end if;
+  v_discount:=coalesce((p_sale->>'discount_amount')::numeric,0);
+  if v_discount<0 then raise exception 'Descuento inválido'; end if;
+  v_payment:=coalesce(nullif(trim(p_sale->>'payment_method'),''),'Efectivo');
+  if v_payment not in ('Efectivo','Transferencia','Tarjeta','Débito','Crédito','Mercado Pago') then raise exception 'Medio de pago no habilitado para esta fase'; end if;
+  v_customer:=nullif(trim(p_sale->>'customer_id'),'');
+  v_name:=coalesce(nullif(trim(p_sale->>'customer_name'),''),'Consumidor Final');
+  v_date:=current_date;
+  v_sale_number:='POS-'||left(v_id,12);
+  for v_item in select value from jsonb_array_elements(p_sale->'items') loop
+    if nullif(v_item->>'product_id','') is null then raise exception 'Falta producto'; end if;
+    v_qty:=coalesce((v_item->>'quantity_base')::numeric,0);
+    if v_qty<=0 or v_qty<>trunc(v_qty) or v_qty>10000 then raise exception 'Cantidad base inválida'; end if;
+    select id,name,current_stock,caviahue_cost,sale_price,base_unit into v_product
+    from public.products where id=v_item->>'product_id' and active=true for update;
+    if not found then raise exception 'Producto inexistente'; end if;
+    select coalesce(sum((line->>'quantity_base')::numeric),0) into v_reserved
+    from public.stayclean_mp_payment_intents i
+    cross join lateral jsonb_array_elements(i.items_snapshot) line
+    where i.status='pending' and i.expires_at>now()
+      and line->>'product_id'=v_product.id;
+    if v_product.current_stock-v_reserved<v_qty then
+      raise exception 'Stock insuficiente o reservado para compras online para %',v_product.name;
+    end if;
+    if v_product.sale_price is null or v_product.sale_price<=0 or v_product.sale_price<coalesce(v_product.caviahue_cost,0) then raise exception 'Precio no autorizado para %',v_product.name; end if;
+    v_sub:=v_sub+v_qty*v_product.sale_price;
+    update public.products set current_stock=current_stock-v_qty,last_sale_date=v_date,updated_at=now() where id=v_product.id;
+    insert into public.inventory_movements(id,product_id,product_name,movement_type,quantity_base,unit_used,quantity_input,previous_stock,new_stock,unit_cost,reference_type,reference_id,notes,user_name)
+    values(gen_random_uuid()::text,v_product.id,v_product.name,'VENTA',-v_qty,v_product.base_unit,v_qty,v_product.current_stock,v_product.current_stock-v_qty,v_product.caviahue_cost,'VENTA','pos-'||v_id,'Venta POS',auth.uid()::text);
+    v_items:=v_items||jsonb_build_array(jsonb_build_object('product_id',v_product.id,'product_name',v_product.name,'quantity_base',v_qty,'unit_price',v_product.sale_price,'subtotal',v_qty*v_product.sale_price));
+  end loop;
+  if v_discount<>0 then raise exception 'Descuentos requieren aprobación y todavía no están habilitados'; end if;
+  v_total:=v_sub;
+  insert into public.sales(id,sale_number,date,customer_id,customer_name,items,subtotal,discount_amount,total,payment_method,payment_status,status,user_id,user_name,notes)
+  values('pos-'||v_id,v_sale_number,v_date,v_customer,v_name,v_items,v_sub,0,v_total,v_payment,'PAGADA','COMPLETADA',null,auth.uid()::text,left(coalesce(p_sale->>'notes',''),500));
+  insert into public.audit_log(id,user_id,user_name,user_role,action,module,reference_id,details)
+  values(gen_random_uuid()::text,auth.uid()::text,auth.uid()::text,'STAFF','CREAR_VENTA','VENTAS','pos-'||v_id,'Venta POS por '||v_total::text);
+  return jsonb_build_object('success',true,'sale_id','pos-'||v_id,'sale_number',v_sale_number,'total',v_total,'replayed',false);
+end;
+$$;
