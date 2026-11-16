@@ -213,7 +213,7 @@ begin
       set status='fulfillment_review',mp_status=p_mp_status,
           mp_status_detail=p_mp_status_detail,mp_total_paid=p_total_paid,updated_at=now()
       where id=p_intent_id;
-      raise exception 'Pago acreditado pero stock insuficiente: requiere revisión manual';
+      return jsonb_build_object('success',false,'requires_manual_review',true,'message','Pago acreditado pero stock insuficiente');
     end if;
   end loop;
 
