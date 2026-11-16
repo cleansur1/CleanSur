@@ -6,21 +6,30 @@ function response(status: number, body = "ok") {
 }
 
 async function verifySignature(secret: string, signature: string, requestId: string, dataId: string) {
-  const parts = Object.fromEntries(signature.split(",").map((part) => {
-    const [key, value] = part.trim().split("=");
-    return [key, value];
-  }));
-  if (!parts.ts || !parts.v1) return false;
+  const parts: Record<string, string> = {};
+  for (const part of signature.split(",")) {
+    const separator = part.indexOf("=");
+    if (separator < 1) continue;
+    const name = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (name && value) parts[name] = value;
+  }
+  if (!parts.ts || !parts.v1) {
+    return { valid: false, hasTimestamp: Boolean(parts.ts), hasV1: Boolean(parts.v1), digestMatches: false };
+  }
   const manifest = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${parts.ts};`;
   const key = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
   );
   const signed = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(manifest)));
   const digest = Array.from(signed).map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (digest.length !== parts.v1.length) return false;
-  let diff = 0;
-  for (let i = 0; i < digest.length; i++) diff |= digest.charCodeAt(i) ^ parts.v1.charCodeAt(i);
-  return diff === 0;
+  let diff = digest.length ^ parts.v1.length;
+  const length = Math.max(digest.length, parts.v1.length);
+  for (let i = 0; i < length; i++) {
+    diff |= (digest.charCodeAt(i) || 0) ^ (parts.v1.charCodeAt(i) || 0);
+  }
+  const digestMatches = diff === 0;
+  return { valid: digestMatches, hasTimestamp: true, hasV1: true, digestMatches };
 }
 
 Deno.serve(async (req: Request) => {
@@ -44,10 +53,13 @@ Deno.serve(async (req: Request) => {
       });
       return response(400, "missing signature data");
     }
-    if (!await verifySignature(webhookSecret, signature, requestId, dataId)) {
-      console.warn("MP webhook rejected: signature mismatch", {
-        signatureHasTimestamp: /(?:^|,)\\s*ts=/.test(signature),
-        signatureHasV1: /(?:^|,)\\s*v1=/.test(signature),
+    const signatureCheck = await verifySignature(webhookSecret, signature, requestId, dataId);
+    if (!signatureCheck.valid) {
+      console.warn("MP webhook rejected: signature validation failed", {
+        signatureHeaderPresent: Boolean(signature),
+        signatureHasTimestamp: signatureCheck.hasTimestamp,
+        signatureHasV1: signatureCheck.hasV1,
+        digestMatches: signatureCheck.digestMatches,
         requestIdPresent: Boolean(requestId),
         dataIdPresent: Boolean(dataId),
       });
