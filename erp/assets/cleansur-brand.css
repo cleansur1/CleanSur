@@ -1,0 +1,88 @@
+/* CleanSur UI v2 — source: CleanSur Kit de Marca y Guia UI.
+   Pure presentation layer: do not change IDs, routes, payments or stock logic. */
+:root {
+ --cs-primary:#0E3A6B;--cs-secondary:#1E88E5;--cs-sky:#8FD0F4;
+ --cs-soft:#E9F4FB;--cs-white:#FFFFFF;--cs-ink:#092B50;
+ --cs-border:#D8E4EC;--cs-success:#167347;--cs-error:#B42318;
+ --cs-radius:12px;--cs-focus:0 0 0 3px rgba(30,136,229,.20);
+ --cs-shadow:0 3px 14px rgba(14,58,107,.055);
+}
+html{font-family:Montserrat,Arial,sans-serif}
+body.cs-store{background:#fff;color:var(--cs-ink)}
+body.cs-erp{background:#F6F9FC;color:var(--cs-ink)}
+body.cs-store,body.cs-erp{font-family:Montserrat,Arial,sans-serif}
+.cs-store button,.cs-erp button,.cs-store input,.cs-erp input,
+.cs-store select,.cs-erp select,.cs-store textarea,.cs-erp textarea{
+ font-family:inherit}
+.cs-store button,.cs-erp button,.cs-store select,.cs-erp select,
+.cs-store input:not([type="checkbox"]):not([type="radio"]),
+.cs-erp input:not([type="checkbox"]):not([type="radio"]){
+ min-height:44px}
+.cs-store :is(button,a,input,select,textarea):focus-visible,
+.cs-erp :is(button,a,input,select,textarea):focus-visible{
+ outline:2px solid var(--cs-secondary);outline-offset:2px}
+.cs-store :is(input,select,textarea):focus,
+.cs-erp :is(input,select,textarea):focus{
+ border-color:var(--cs-secondary)!important;box-shadow:var(--cs-focus)}
+.cs-store :is(input,select,textarea),.cs-erp :is(input,select,textarea){
+ accent-color:var(--cs-primary)}
+.cs-store .btn-stayclean,.cs-store .btn-voltra,
+.cs-erp .btn-stayclean,.cs-erp .btn-voltra{
+ background:var(--cs-primary)!important;border-color:var(--cs-primary)!important;
+ color:#fff!important;border-radius:10px;min-height:44px;
+ transition:background .18s ease,box-shadow .18s ease,transform .18s ease}
+.cs-store .btn-stayclean:hover,.cs-store .btn-voltra:hover,
+.cs-erp .btn-stayclean:hover,.cs-erp .btn-voltra:hover{
+ background:var(--cs-secondary)!important;box-shadow:0 4px 12px rgba(30,136,229,.18)}
+.cs-store .price-stayclean,.cs-store .price-voltra,
+.cs-erp .price-stayclean,.cs-erp .price-voltra{color:var(--cs-primary)!important}
+.cs-store .badge-off,.cs-erp .badge-off{background:var(--cs-primary)!important;color:#fff}
+.cs-store header{background:rgba(255,255,255,.97)!important;border-bottom:1px solid var(--cs-border)!important}
+.cs-store header .rounded-full{border-radius:10px}
+.cs-store main :is(.rounded-xl,.rounded-2xl){border-radius:var(--cs-radius)}
+.cs-store main .bg-white{border-color:var(--cs-border)}
+.cs-store main :is(.shadow-lg,.shadow-xl,.shadow-md){box-shadow:var(--cs-shadow)}
+.cs-store #searchInput,.cs-store #mobileSearchInput{
+ background:#fff!important;border:1px solid var(--cs-border)!important;
+ border-radius:10px!important}
+.cs-store #searchInput:focus,.cs-store #mobileSearchInput:focus{
+ border-color:var(--cs-secondary)!important}
+.cs-store a:not(.btn-stayclean):not(.btn-voltra):hover{color:var(--cs-secondary)}
+.cs-store :is(#cartCountBadge){background:var(--cs-secondary)!important}
+.cs-store :is(#cartDrawer,#cartModal,#checkoutModal,#profileModal){
+ color:var(--cs-ink)}
+.cs-store :is(button,input,select,textarea):disabled,
+.cs-erp :is(button,input,select,textarea):disabled{cursor:not-allowed;opacity:.65}
+.cs-erp #sidebar{background:var(--cs-primary)!important;
+ border-right:1px solid rgba(143,208,244,.2)!important}
+.cs-erp #sidebar>div:first-child{background:#092F58!important}
+.cs-erp #sidebar .nav-link{border-radius:10px;min-height:38px}
+.cs-erp #sidebar .nav-link:hover{background:rgba(30,136,229,.28)!important;color:#fff}
+.cs-erp #sidebar .nav-link[aria-current="page"]{
+ background:rgba(30,136,229,.30)!important;border-left:3px solid var(--cs-sky)}
+.cs-erp main :is(.rounded-xl,.rounded-2xl){border-radius:var(--cs-radius)}
+.cs-erp main .bg-white{border-color:var(--cs-border)}
+.cs-erp main :is(.shadow-sm,.shadow-md,.shadow-lg){box-shadow:var(--cs-shadow)}
+.cs-erp main table{border-collapse:collapse;width:100%}
+.cs-erp main thead{background:#F0F6FA;color:var(--cs-ink)}
+.cs-erp main thead th{font-weight:700;letter-spacing:.025em}
+.cs-erp main tbody tr{border-bottom:1px solid #E7EEF4}
+.cs-erp main tbody tr:hover{background:#F6FAFD}
+.cs-erp main th,.cs-erp main td{vertical-align:middle}
+.cs-erp main h1,.cs-erp main h2{color:var(--cs-primary)}
+.cs-erp main :is(.bg-emerald-600,.bg-blue-600):not(.status-badge){
+ background:var(--cs-primary)}
+.cs-erp main :is(.bg-emerald-600,.bg-blue-600):not(.status-badge):hover{
+ background:var(--cs-secondary)}
+.cs-erp main .text-emerald-700:not(.status-badge){color:var(--cs-success)}
+@media(max-width:640px){
+ .cs-store main{padding-left:14px;padding-right:14px}
+ .cs-store header .max-w-7xl{padding-left:12px;padding-right:12px}
+ .cs-store h1{line-height:1.2}
+ .cs-erp main{max-width:100%}
+ .cs-erp main .overflow-x-auto{overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+}
+@media(prefers-reduced-motion:reduce){
+ .cs-store *, .cs-erp *{scroll-behavior:auto!important;animation-duration:.01ms!important;
+ transition-duration:.01ms!important}
+}

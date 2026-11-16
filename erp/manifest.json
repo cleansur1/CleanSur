@@ -1,7 +1,7 @@
 {
-  "name": "StayClean ERP - Distribuidora Limpieza y Descartables",
-  "short_name": "StayClean",
-  "description": "Sistema de gestión ERP de insumos descartables, químicos y hotelería en Caviahue - StayClean",
+  "name": "CleanSur ERP - Distribuidora Limpieza y Descartables",
+  "short_name": "CleanSur",
+  "description": "Sistema de gestión ERP de insumos descartables, químicos y hotelería en Caviahue - CleanSur",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "any",
