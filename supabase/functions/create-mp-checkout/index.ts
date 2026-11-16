@@ -74,7 +74,13 @@ Deno.serve(async (req: Request) => {
         capture_mode: "automatic",
         total_amount: Number(stored.total_amount).toFixed(2),
         external_reference: stored.id,
-        expiration_time: "PT30M",\n        config: { online: {\n          success_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=success&request_id=${encodeURIComponent(requestId)}`,\n          failure_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=failure&request_id=${encodeURIComponent(requestId)}`,\n          pending_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=pending&request_id=${encodeURIComponent(requestId)}`,\n          auto_return: "all"\n        } },
+        expiration_time: "PT30M",
+        config: { online: {
+          success_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=success&request_id=${encodeURIComponent(requestId)}`,
+          failure_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=failure&request_id=${encodeURIComponent(requestId)}`,
+          pending_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=pending&request_id=${encodeURIComponent(requestId)}`,
+          auto_return: "all"
+        } },
         items: (stored.items_snapshot ?? []).map((line: any) => ({
           title: String(line.product_name).slice(0, 120),
           quantity: Number(line.quantity),
