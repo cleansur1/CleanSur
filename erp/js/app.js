@@ -1,5 +1,5 @@
 // Controlador Principal & Router para Limpieza Caviahue ERP v6.0
-import { db } from './db.js?v=6.2';
+import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=6.0';
