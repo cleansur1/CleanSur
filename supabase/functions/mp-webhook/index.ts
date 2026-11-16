@@ -75,7 +75,11 @@ Deno.serve(async (req: Request) => {
       });
       if (error) {
         console.error("Could not finalize paid StayClean order", error);
-        return response(500, "paid order needs retry or manual review");
+        return response(500, "paid order needs retry");
+      }
+      if (data?.requires_manual_review) {
+        console.error("Paid StayClean order requires manual stock review", intent.id);
+        return response(500, "paid order requires manual review");
       }
       return response(200, "payment confirmed");
     }
