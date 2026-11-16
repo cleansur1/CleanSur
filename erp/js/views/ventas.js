@@ -12,7 +12,26 @@ let paymentMethod = 'Efectivo';
 let saleNotes = '';
 
 export const VentasView = {
+  async renderCentralOrders(container) {
+    const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY,staycleanStaffOrders}=await import('../supabase_public.js');
+    const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const token=sessionStorage.getItem('stayclean_staff_access_token');
+    if(token) {
+      try {
+        const rows=await staycleanStaffOrders(token);
+        if(!Array.isArray(rows))throw Error('No autorizado');
+        container.innerHTML='<section class="bg-white p-6 rounded-xl"><h2 class="font-bold text-xl">Pedidos online centrales</h2><p class="text-sm mb-3">Supabase · stock descontado al confirmar</p>'+(rows.length?rows.map(o=>'<div class="border-b p-2">'+esc(o.number)+' · '+esc(o.customer)+' · '+esc(o.city)+' · $'+Number(o.total).toLocaleString('es-AR')+' · '+esc(o.status)+'</div>').join(''):'<p>No hay pedidos registrados.</p>')+'</section>';return;
+      } catch(e) {sessionStorage.removeItem('stayclean_staff_access_token');}
+    }
+    container.innerHTML='<section class="bg-white p-6 rounded-xl"><h2 class="font-bold mb-2">Iniciar sesión de personal Supabase</h2><form id="stayclean-login"><input class="border p-2 m-1" name="email" type="email" placeholder="Email" required><input class="border p-2 m-1" name="password" type="password" placeholder="Contraseña" required><button class="bg-blue-800 text-white p-2 rounded" type="submit">Ingresar</button></form><p id="stayclean-login-error"></p></section>';
+    container.querySelector('#stayclean-login').onsubmit=async e=>{
+      e.preventDefault();const d=new FormData(e.target);
+      try {const r=await fetch(STAYCLEAN_SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:d.get('email'),password:d.get('password')})});const x=await r.json();if(!r.ok||!x.access_token)throw Error('Ingreso inválido');sessionStorage.setItem('stayclean_staff_access_token',x.access_token);await this.renderCentralOrders(container);}
+      catch(err){container.querySelector('#stayclean-login-error').textContent='No se pudo autenticar al personal autorizado';}
+    };
+  },
   render(container, params = {}) {
+    if(params.action==='online'){this.renderCentralOrders(container);return;}
     const isNew = params.action === 'new';
     const sales = db.getSales();
     const customers = db.getCustomers();
@@ -31,7 +50,7 @@ export const VentasView = {
       <div class="space-y-6 animate-fade-in">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <div>
-            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Registro de Ventas & Comprobantes</h1>
+            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Registro de Ventas & Comprobantes</h1><button onclick="window.app.navigate(&quot;ventas&quot;, {action: &quot;online&quot;})" class="text-blue-700 underline text-sm">Pedidos online / iniciar sesión</button>
             <p class="text-xs text-slate-500">Historial de ventas comerciales, facturación y control de márgenes.</p>
           </div>
           <button onclick="window.app.navigate('ventas', { action: 'new' })" class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow-sm transition">
