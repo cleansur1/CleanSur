@@ -117,7 +117,7 @@
       <!-- Acciones de Usuario: Perfil y Carrito -->
       <div class="flex items-center gap-2.5 sm:gap-3">
         <!-- Botón Perfil / Iniciar Sesión -->
-        <button id="btnUserProfile" onclick="window.tiendaApp.openProfileModal()" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#8FD0F4]/50 hover:border-[#4EA1DD] bg-white hover:bg-[#E9F4FB] text-xs font-bold text-[#0E3A6B] transition shadow-xs">
+        <button id="btnUserProfile" onclick="window.tiendaApp.openAccountDialog()" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#8FD0F4]/50 hover:border-[#4EA1DD] bg-white hover:bg-[#E9F4FB] text-xs font-bold text-[#0E3A6B] transition shadow-xs">
           <i data-lucide="user" class="w-4 h-4 text-[#4EA1DD]"></i>
           <span id="userProfileLabel" class="hidden sm:inline">Mi Perfil</span>
         </button>
@@ -315,7 +315,7 @@
         <p class="text-[11px] text-slate-400 mb-3">
           Armá tu pedido en el carrito y envialo directamente por WhatsApp con el detalle de entrega y facturación fiscal.
         </p>
-        <button onclick="window.tiendaApp.openProfileModal()" class="px-4 py-2 bg-[#0E3A6B] hover:bg-[#4EA1DD] text-white rounded-lg text-[11px] font-bold border border-[#8FD0F4]/40 transition">
+        <button onclick="window.tiendaApp.openAccountDialog()" class="px-4 py-2 bg-[#0E3A6B] hover:bg-[#4EA1DD] text-white rounded-lg text-[11px] font-bold border border-[#8FD0F4]/40 transition">
           Gestionar Mi Perfil de Entrega
         </button>
       </div>
@@ -499,6 +499,6 @@
   </div>
 
   <!-- Script de la Tienda Standalone -->
-  <script type="module" src="../erp/js/tienda_standalone.js?v=5.1"></script>
+  <script type="module" src="../erp/js/tienda_standalone.js?v=6.0"></script>
 </body>
 </html>
