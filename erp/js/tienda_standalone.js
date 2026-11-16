@@ -2,14 +2,14 @@
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
 import { db } from './db.js';
 import { Formatter } from './models.js';
-import { staycleanPublicCatalog, staycleanCreateOrder } from './supabase_public.js';
+import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder } from './supabase_public.js';
 
 class TiendaStandaloneApp {
   constructor() {
     this.products = [];
     this.cart = this.loadCart();
     this.pendingRequestId = sessionStorage.getItem('stayclean_pending_order_id') || null;
-    this.customerProfile = this.loadCustomerProfile();
+    this.customerProfile = null;
     this.activeFilters = {
       availability: 'all',
       price: 'all',
@@ -22,6 +22,7 @@ class TiendaStandaloneApp {
 
   init() {
     this.loadProducts();
+    this.restoreCustomerSession();
     this.setupEventListeners();
     this.updateProfileUI();
     this.updateCartBadge();
@@ -43,21 +44,35 @@ class TiendaStandaloneApp {
     this.updateCartBadge();
   }
 
-  loadCustomerProfile() {
-    try {
-      const saved = localStorage.getItem('caviahue_customer_profile');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
+  async restoreCustomerSession(){
+    if(!await staycleanAuthToken()){this.customerProfile=null;this.updateProfileUI();return;}
+    try{const p=await staycleanCustomerProfile();if(p?.registered){this.customerProfile={name:p.name,phone:p.phone,address:p.address,zone:p.city,email:p.email};this.updateProfileUI();}}
+    catch(e){console.error('No se pudo restaurar el perfil',e);}
   }
-
-  saveCustomerProfileData(profile) {
-    this.customerProfile = profile;
-    localStorage.setItem('caviahue_customer_profile', JSON.stringify(profile));
-    
-    // Perfil local del navegador; no afirmar que se registró en el ERP central.
-    this.updateProfileUI();
+  async saveCustomerProfileData(profile){
+    const p=await staycleanCustomerProfile({name:profile.name,phone:profile.phone,address:profile.address,city:/copahue/i.test(profile.zone||'')?'Copahue':'Caviahue'});
+    this.customerProfile={...profile,email:p.email};this.updateProfileUI();
+  }
+  async openAccountDialog(){
+    const active=!!(await staycleanAuthToken());
+    const action=prompt(active?'Cuenta StayClean: escribí PEDIDOS para ver tus compras, SALIR para cerrar sesión o PERFIL para editar tus datos.':'Cuenta StayClean: escribí REGISTRO, INGRESAR o RECUPERAR:');
+    if(!action)return;
+    const cmd=action.trim().toUpperCase();
+    try{
+      if(cmd==='SALIR'){await staycleanAuthSignOut();this.customerProfile=null;this.updateProfileUI();alert('Sesión cerrada');return;}
+      if(cmd==='PEDIDOS'){const orders=await staycleanCustomerOrders();alert(orders.length?orders.map(o=>o.number+' · '+o.status+' · $'+o.total).join('\\n'):'Todavía no tenés pedidos');return;}
+      if(cmd==='PERFIL'){this.openProfileModal();return;}
+      if(cmd==='RECUPERAR'){const email=prompt('Correo de tu cuenta');if(email){await staycleanAuthReset(email);alert('Si existe una cuenta, recibirás instrucciones por correo.')}return;}
+      if(cmd==='REGISTRO'||cmd==='INGRESAR'){
+        const email=prompt('Correo electrónico');if(!email)return;
+        const password=prompt('Contraseña (mínimo 8 caracteres)');if(!password)return;
+        if(cmd==='REGISTRO'){await staycleanAuthSignUp(email,password);alert('Revisá tu correo para confirmar la cuenta. Luego elegí INGRESAR.');return;}
+        await staycleanAuthSignIn(email,password);await this.restoreCustomerSession();
+        if(!this.customerProfile)this.openProfileModal();else alert('Sesión iniciada. Tus datos ya están disponibles.');
+        return;
+      }
+      alert('Opción no reconocida');
+    }catch(e){alert('Cuenta StayClean: '+e.message);}
   }
 
   async loadProducts() {
@@ -587,11 +602,12 @@ class TiendaStandaloneApp {
     if (this.customerProfile && this.customerProfile.name) {
       label.textContent = this.customerProfile.name.split(' ')[0];
     } else {
-      label.textContent = 'Crear Perfil / Ingresar';
+      label.textContent = 'Crear cuenta / Ingresar';
     }
   }
 
-  openProfileModal() {
+  async openProfileModal() {
+    if(!await staycleanAuthToken()){await this.openAccountDialog();return;}
     const modal = document.getElementById('profileModal');
     if (!modal) return;
 
@@ -616,7 +632,7 @@ class TiendaStandaloneApp {
     if (modal) modal.classList.add('hidden');
   }
 
-  saveProfile(e) {
+  async saveProfile(e) {
     e.preventDefault();
     const profile = {
       name: document.getElementById('profName').value.trim(),
@@ -630,7 +646,7 @@ class TiendaStandaloneApp {
       updated_at: new Date().toISOString()
     };
 
-    this.saveCustomerProfileData(profile);
+    try {await this.saveCustomerProfileData(profile);} catch(err){alert(err.message);return;}
     this.closeProfileModal();
 
     // Si tiene productos en el carrito y venía del checkout, abrir confirmación
@@ -641,7 +657,8 @@ class TiendaStandaloneApp {
     }
   }
 
-  proceedToCheckout() {
+  async proceedToCheckout() {
+    if(!await staycleanAuthToken()){this.closeCart();await this.openAccountDialog();return;}
     if (this.cart.length === 0) {
       alert('Tu carrito está vacío. Agregá productos antes de continuar.');
       return;
@@ -788,7 +805,7 @@ class TiendaStandaloneApp {
     sessionStorage.setItem('stayclean_pending_order_id', requestId);
     const city = /copahue/i.test(prof.zone || '') ? 'Copahue' : 'Caviahue';
     try {
-      const savedOrder = await staycleanCreateOrder({
+      const savedOrder = await staycleanAuthenticatedOrder({
         request_id: requestId,
         customer_name: prof.name,
         customer_phone: prof.phone,
