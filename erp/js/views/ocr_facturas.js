@@ -1077,16 +1077,49 @@ export const OcrFacturasView = {
   },
 
   async confirmExtractedPurchase() {
-    // Prohibido guardar compras OCR en localStorage o aumentar stock local.
-    // El único destino autorizado es la transacción autenticada de Supabase.
-    if (!this.extractedInvoice) return;
+    if(!this.extractedInvoice)return;
     this.syncHeaderInputs();
     const inv=this.extractedInvoice;
-    if (this.ocrRequiresReview || inv.key === 'OCR_REAL_PENDIENTE_REVISION') {
-      notify('El documento OCR está pendiente de revisión y conciliación. No se modificó el inventario central.', 'error');
-      return;
+    if(this.ocrRequiresReview || inv.key==='OCR_REAL_PENDIENTE_REVISION') {
+      notify('La factura requiere revisión antes de modificar inventario.','error');return;
     }
-    notify('Recepción central pendiente de habilitación: falta validar usuario autorizado, códigos de proveedor, cantidades recibidas y costos contra Supabase. No se modificó stock.', 'error');
+    const token=sessionStorage.getItem('stayclean_staff_access_token');
+    if(!token){notify('Ingresá como personal autorizado desde Ventas → Pedidos online.','error');return;}
+    try {
+      const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
+      const rpc=async(name,payload)=>{const r=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(payload)});const x=await r.json();if(!r.ok)throw Error(x.message||'Error de Supabase');return x;};
+      const lookup=await rpc('stayclean_staff_purchase_lookup',{});
+      if(!lookup?.products||!lookup?.suppliers)throw Error('No se pudo validar acceso de personal');
+      const normalize=x=>String(x||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');
+      const supplier=lookup.suppliers.find(p=>normalize(p.name)===normalize(inv.supplier_name));
+      if(!supplier)throw Error('Proveedor sin coincidencia exacta en Supabase. Corregí el proveedor antes de registrar.');
+      const items=[];const seen=new Set();
+      for(const it of inv.items||[]){
+        const code=normalize(it.code);
+        if(!code)throw Error('Hay un artículo sin código SKU: requiere conciliación manual');
+        if(seen.has(code))throw Error('SKU repetido '+code+'. Consolidá las filas y verificá las cantidades recibidas.');
+        seen.add(code);
+        const matches=lookup.products.filter(p=>normalize(p.sku)===code);
+        if(matches.length!==1)throw Error('El SKU '+code+' no tiene coincidencia única en Supabase.');
+        const boxes=Number(it.received_boxes ?? it.boxes_count ?? it.quantity);
+        const units=Number(it.units_per_box??1);
+        const quantity=boxes*units;
+        if(!Number.isInteger(quantity)||quantity<=0)throw Error('Cantidad recibida inválida en '+code);
+        const total=Number(it.line_total||0);
+        const cost=total/quantity;
+        if(!Number.isFinite(cost)||cost<0)throw Error('Costo inválido en '+code);
+        items.push({product_id:matches[0].id,quantity_base:quantity,unit_cost:cost});
+      }
+      if(!items.length)throw Error('Factura sin productos válidos');
+      const invoice=String(inv.invoice_number||'').trim();
+      if(!invoice)throw Error('Número de factura requerido');
+      const id=crypto.randomUUID();
+      const message='Confirmar RECEPCIÓN CENTRAL de '+invoice+' ('+supplier.name+') con '+items.length+' productos y '+items.reduce((n,x)=>n+x.quantity_base,0)+' unidades base. Esta acción SUMA stock real y no se puede deshacer automáticamente.';
+      if(!window.confirm(message))return;
+      const result=await rpc('stayclean_staff_receive_purchase',{p_purchase:{request_id:id,supplier_id:supplier.id,invoice_number:invoice,notes:inv.notes||'',items}});
+      notify('Factura '+invoice+' recibida en Supabase. Stock central actualizado.','success');
+      this.extractedInvoice=null;if(window.app)window.app.navigate('compras');
+    }catch(err){console.error(err);notify('No se modificó el inventario: '+err.message,'error');}
   },
 
   loadAllTodayInvoicesBatch() {
