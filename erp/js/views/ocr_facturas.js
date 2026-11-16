@@ -885,7 +885,17 @@ export const OcrFacturasView = {
       const lines = allText.split(/\n/).map(x => x.trim()).filter(Boolean);
       const sysParsed = this.parseSysOrderText(allText);
       const dateMatch = allText.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
-      const documentDate = dateMatch ? [dateMatch[3],dateMatch[2],dateMatch[1]].join('-') : '';
+      const documentDate = (() => {
+        if (!dateMatch) return '';
+        const first=Number(dateMatch[1]), second=Number(dateMatch[2]), year=Number(dateMatch[3]);
+        // Fechas como 11/16/2026: el segundo número > 12 obliga formato MM/DD/YYYY.
+        const month = second>12 ? first : first>12 ? second : null;
+        const day = second>12 ? second : first>12 ? first : null;
+        if (!month || !day) return ''; // Fechas ambiguas: revisión manual, sin adivinar.
+        const d=new Date(Date.UTC(year,month-1,day));
+        if(d.getUTCFullYear()!==year||d.getUTCMonth()!==month-1||d.getUTCDate()!==day)return '';
+        return [year,String(month).padStart(2,'0'),String(day).padStart(2,'0')].join('-');
+      })();
       const cuit = allText.match(/(?:CUIT|C\.U\.I\.T)[^\d]{0,15}(\d{2}[- ]?\d{8}[- ]?\d)/i)?.[1] || '';
       const invoiceNumber = allText.match(/(?:FACTURA|COMPROBANTE|N[°ºo.]\s*)[^\n]{0,50}?(\d{4,5}[- ]\d{6,8})/i)?.[1] || allText.match(/\b\d{4,5}-\d{6,8}\b/)?.[0] || '';
       const totalCandidates = [...allText.matchAll(/(?:TOTAL\s*(?:A\s*PAGAR)?|IMPORTE\s*TOTAL)\s*[:$ ]*([\d.,]+)/gi)];
