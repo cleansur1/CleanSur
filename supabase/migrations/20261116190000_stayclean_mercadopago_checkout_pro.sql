@@ -348,3 +348,54 @@ begin
   return jsonb_build_object('success',true,'sale_id','pos-'||v_id,'sale_number',v_sale_number,'total',v_total,'replayed',false);
 end;
 $$;
+
+
+-- Legacy staff POS RPC also respects active online reservations.
+create or replace function public.stayclean_staff_record_sale(p_sale jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_req uuid; v_existing record; v_item record; v_p record;
+  v_lines jsonb:='[]'::jsonb; v_total numeric:=0; v_before numeric;
+  v_qty numeric; v_id text; v_name text; v_reserved numeric;
+begin
+  if not public.stayclean_is_staff() then raise exception 'Acceso no autorizado' using errcode='42501'; end if;
+  v_req:=(p_sale->>'request_id')::uuid;
+  if v_req is null then raise exception 'Identificador requerido'; end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_req::text,0));
+  v_id:='pos-'||v_req::text;
+  select id,total into v_existing from public.sales where id=v_id;
+  if found then return jsonb_build_object('success',true,'sale_id',v_existing.id,'total',v_existing.total,'replayed',true); end if;
+  if jsonb_typeof(p_sale->'items') is distinct from 'array' or jsonb_array_length(p_sale->'items') not between 1 and 100 then raise exception 'Artículos inválidos'; end if;
+  v_name:=nullif(trim(p_sale->>'customer_name'),'');
+  for v_item in
+    select x.product_id,sum(x.quantity) quantity
+    from jsonb_to_recordset(p_sale->'items') as x(product_id text,quantity numeric)
+    group by x.product_id order by x.product_id
+  loop
+    if v_item.quantity is null or v_item.quantity<=0 or v_item.quantity<>trunc(v_item.quantity) then raise exception 'Cantidad inválida'; end if;
+    select id,name,sale_unit,current_stock,sale_to_base_factor,sale_price,active
+    into v_p from public.products where id=v_item.product_id for update;
+    if not found or not v_p.active or v_p.sale_price<=0 or v_p.sale_to_base_factor<=0 then raise exception 'Producto inválido'; end if;
+    v_qty:=v_item.quantity*v_p.sale_to_base_factor;
+    select coalesce(sum((line->>'quantity_base')::numeric),0) into v_reserved
+    from public.stayclean_mp_payment_intents i
+    cross join lateral jsonb_array_elements(i.items_snapshot) line
+    where i.status='pending' and i.expires_at>now()
+      and line->>'product_id'=v_p.id;
+    if v_p.current_stock-v_reserved<v_qty then raise exception 'Stock insuficiente o reservado para compras online: %',v_p.name; end if;
+    v_before:=v_p.current_stock;
+    update public.products set current_stock=v_before-v_qty,updated_at=now(),last_sale_date=current_date where id=v_p.id;
+    insert into public.inventory_movements(id,product_id,product_name,movement_type,quantity_base,unit_used,quantity_input,previous_stock,new_stock,reference_type,reference_id,user_name)
+    values(gen_random_uuid()::text,v_p.id,v_p.name,'VENTA',-v_qty,v_p.sale_unit,v_item.quantity,v_before,v_before-v_qty,'VENTA_POS',v_id,auth.uid()::text);
+    v_lines:=v_lines||jsonb_build_array(jsonb_build_object('product_id',v_p.id,'product_name',v_p.name,'quantity',v_item.quantity,'quantity_base',v_qty,'unit_price',v_p.sale_price,'subtotal',v_item.quantity*v_p.sale_price));
+    v_total:=v_total+v_item.quantity*v_p.sale_price;
+  end loop;
+  insert into public.sales(id,sale_number,date,customer_name,items,subtotal,total,payment_method,payment_status,status,user_id,user_name,notes)
+  values(v_id,'POS-'||left(v_req::text,8),current_date,coalesce(v_name,'Consumidor final'),v_lines,v_total,v_total,coalesce(nullif(p_sale->>'payment_method',''),'A coordinar'),'PENDIENTE','COMPLETADA',null,auth.uid()::text,left(coalesce(p_sale->>'notes',''),500));
+  return jsonb_build_object('success',true,'sale_id',v_id,'total',v_total,'stock_deducted',true,'replayed',false);
+end;
+$$;
