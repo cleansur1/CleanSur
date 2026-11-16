@@ -1,0 +1,46 @@
+/* CleanSur — Design tokens v1.0
+   Visual layer only. Does not alter application logic or data flows. */
+:root {
+  --cs-primary: #0E3A6B;
+  --cs-secondary: #1E88E5;
+  --cs-sky: #8FD0F4;
+  --cs-soft: #E9F4FB;
+  --cs-white: #FFFFFF;
+  --cs-ink: #092B50;
+  --cs-border: #D7EAF6;
+  --cs-radius-card: 16px;
+  --cs-radius-control: 10px;
+  --cs-shadow-card: 0 8px 24px rgba(14,58,107,.08);
+}
+html, body { font-family: 'Montserrat', sans-serif; }
+body { color: var(--cs-ink); }
+a { text-underline-offset: 3px; }
+button, input, select, textarea { font-family: inherit; }
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--cs-secondary) !important;
+  box-shadow: 0 0 0 3px rgba(30,136,229,.14);
+}
+.btn-stayclean, .btn-voltra {
+  background: var(--cs-primary) !important;
+  border-color: var(--cs-primary) !important;
+  color: var(--cs-white) !important;
+  border-radius: var(--cs-radius-control);
+  transition: background-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.btn-stayclean:hover, .btn-voltra:hover {
+  background: var(--cs-secondary) !important;
+  border-color: var(--cs-secondary) !important;
+  box-shadow: 0 5px 14px rgba(30,136,229,.2);
+}
+.badge-off { background: var(--cs-primary) !important; }
+.price-stayclean, .price-voltra { color: var(--cs-primary) !important; }
+#sidebar { background: var(--cs-primary) !important; border-color: rgba(143,208,244,.25) !important; }
+#sidebar > div:first-child { background: #092F58 !important; }
+#sidebar .nav-link { border-radius: 10px; }
+#sidebar .nav-link:hover, #sidebar .nav-link.bg-\[\#0E3A6B\] {
+  background: rgba(30,136,229,.28) !important;
+}
+header { border-color: var(--cs-border) !important; }
+header, .bg-white\/95 { background-color: rgba(255,255,255,.97); }
+.rounded-xl, .rounded-2xl { box-shadow: var(--cs-shadow-card); }
