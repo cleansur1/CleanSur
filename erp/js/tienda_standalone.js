@@ -2,7 +2,7 @@
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
 import { db } from './db.js';
 import { Formatter } from './models.js';
-import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder } from './supabase_public.js';
+import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, staycleanCreateMpCheckout, staycleanMpCheckoutStatus } from './supabase_public.js';
 
 class TiendaStandaloneApp {
   constructor() {
@@ -22,7 +22,7 @@ class TiendaStandaloneApp {
 
   init() {
     this.loadProducts();
-    this.restoreCustomerSession();
+    this.restoreCustomerSession().then(() => this.handleMpReturn());
     this.setupEventListeners();
     this.updateProfileUI();
     this.updateCartBadge();
@@ -769,7 +769,7 @@ class TiendaStandaloneApp {
           <select id="checkoutPaymentMethod" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
             <option value="Efectivo contra entrega">Efectivo contra entrega en Caviahue</option>
             <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
-            <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
+            <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>\n            <option value="Mercado Pago">Mercado Pago (tarjeta y medios disponibles)</option>
           </select>
         </div>
 
@@ -777,7 +777,7 @@ class TiendaStandaloneApp {
         <div class="pt-3 border-t border-slate-100 space-y-2">
           <button onclick="window.tiendaApp.submitOrderToWhatsApp()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99]">
             <i data-lucide="send" class="w-4 h-4"></i>
-            <span>Confirmar y Enviar Pedido por WhatsApp</span>
+            <span>Continuar según forma de pago</span>
           </button>
           <p class="text-[10px] text-slate-400 text-center">
             Se abrirá WhatsApp con el pedido redactado para que lo envíes con un solo clic.
@@ -796,6 +796,36 @@ class TiendaStandaloneApp {
     if (modal) modal.classList.add('hidden');
   }
 
+  async handleMpReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('mp');
+    const requestId = params.get('request_id');
+    if (!result || !requestId) return;
+    try {
+      const status = await staycleanMpCheckoutStatus(requestId);
+      if (status.status === 'approved') {
+        this.cart = [];
+        this.saveCart();
+        this.pendingRequestId = null;
+        sessionStorage.removeItem('stayclean_pending_order_id');
+        await this.loadProducts();
+        alert('¡Pago aprobado! Pedido ' + status.order_number + ' registrado correctamente en StayClean.');
+      } else if (status.status === 'pending') {
+        alert('El pago todavía está pendiente de confirmación. No vuelvas a pagar; podés consultar el estado desde tu cuenta.');
+      } else {
+        alert('El pago no figura aprobado. Tu carrito se conserva para que puedas volver a intentarlo.');
+      }
+    } catch (error) {
+      console.error('No se pudo consultar el retorno de Mercado Pago', error);
+      alert('Volviste de Mercado Pago, pero todavía no pudimos verificar el estado. No vuelvas a pagar; consultá tus pedidos en tu cuenta.');
+    } finally {
+      params.delete('mp');
+      params.delete('request_id');
+      const query = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash);
+    }
+  }
+
   async submitOrderToWhatsApp() {
     if (this.sendingOrder) return;
     const prof = this.customerProfile;
@@ -805,6 +835,16 @@ class TiendaStandaloneApp {
     sessionStorage.setItem('stayclean_pending_order_id', requestId);
     const city = /copahue/i.test(prof.zone || '') ? 'Copahue' : 'Caviahue';
     try {
+      const paymentMethod = document.getElementById('checkoutPaymentMethod')?.value || 'Efectivo contra entrega';
+      if (paymentMethod === 'Mercado Pago') {
+        const checkout = await staycleanCreateMpCheckout(
+          requestId,
+          this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+        );
+        window.location.assign(checkout.checkout_url);
+        return;
+      }
+
       const savedOrder = await staycleanAuthenticatedOrder({
         request_id: requestId,
         customer_name: prof.name,
