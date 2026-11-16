@@ -3,7 +3,7 @@ import { db } from './db.js?v=6.2';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=6.0';
-import { VentasView } from './views/ventas.js?v=6.0';
+import { VentasView } from './views/ventas.js?v=8.0';
 import { ComprasView } from './views/compras.js?v=7.0';
 import { ProductosView } from './views/productos.js?v=6.0';
 import { StockView } from './views/stock.js?v=6.0';
