@@ -8,6 +8,7 @@ class TiendaStandaloneApp {
   constructor() {
     this.products = [];
     this.cart = this.loadCart();
+    this.pendingRequestId = sessionStorage.getItem('stayclean_pending_order_id') || null;
     this.customerProfile = this.loadCustomerProfile();
     this.activeFilters = {
       availability: 'all',
@@ -55,23 +56,7 @@ class TiendaStandaloneApp {
     this.customerProfile = profile;
     localStorage.setItem('caviahue_customer_profile', JSON.stringify(profile));
     
-    // Registrar también en la base del ERP como cliente si no existía
-    try {
-      db.saveCustomer({
-        name: profile.name,
-        customer_type: profile.customer_type,
-        phone: profile.phone,
-        whatsapp: profile.phone,
-        address: profile.address,
-        locality: profile.locality || 'Caviahue',
-        tax_id: profile.tax_id || '',
-        invoice_type: profile.invoice_type || 'B',
-        notes: `Registrado desde Tienda Online. ${profile.notes || ''}`
-      });
-    } catch (e) {
-      console.warn('Error sincronizando cliente con ERP:', e);
-    }
-
+    // Perfil local del navegador; no afirmar que se registró en el ERP central.
     this.updateProfileUI();
   }
 
@@ -82,7 +67,7 @@ class TiendaStandaloneApp {
       this.products = rows.map(p => ({
         ...p, current_stock: Number(p.available_stock),
         sale_price: Number(p.sale_price), in_stock: Number(p.available_stock) > 0,
-        img_url: p.image_url || 'assets/stayclean-logo.jpg',
+        img_url: p.image_url || '../erp/assets/stayclean-logo.jpg',
         has_options: false, promo_badges: [], discount_pct: 0,
         reference_price: Number(p.sale_price)
       }));
@@ -389,7 +374,7 @@ class TiendaStandaloneApp {
 
           <div class="space-y-2 flex-1">
             <div class="flex items-center gap-2">
-              <span class="badge-off px-2.5 py-0.5 rounded text-[11px] font-bold">-${p.discount_pct}% OFF</span>
+              ${p.discount_pct > 0 ? `<span class="badge-off px-2.5 py-0.5 rounded text-[11px] font-bold">-${p.discount_pct}% OFF</span>` : ''}
               <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                 ${p.in_stock ? `Stock disponible (${p.current_stock} unid.)` : 'Sin stock'}
               </span>
@@ -800,6 +785,7 @@ class TiendaStandaloneApp {
     if (!prof || !this.cart.length) return;
     this.sendingOrder = true;
     const requestId = this.pendingRequestId || (this.pendingRequestId = crypto.randomUUID());
+    sessionStorage.setItem('stayclean_pending_order_id', requestId);
     const city = /copahue/i.test(prof.zone || '') ? 'Copahue' : 'Caviahue';
     try {
       const savedOrder = await staycleanCreateOrder({
@@ -816,6 +802,7 @@ class TiendaStandaloneApp {
       this.cart = [];
       this.saveCart();
       this.pendingRequestId = null;
+      sessionStorage.removeItem('stayclean_pending_order_id');
       this.closeOrderConfirmation();
       await this.loadProducts();
       window.open(`https://wa.me/${this.companyWhatsApp}?text=${encodeURIComponent(message)}`, '_blank');
