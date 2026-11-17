@@ -31,5 +31,12 @@ jobs:
           try { await page.locator('#central-form').waitFor({timeout:15000}); } catch(e) { console.log('BOOT TEXT:',await page.locator('#stayclean-boot-message').textContent().catch(()=>'<missing>')); throw e; }
           if(errors.length) throw new Error('JavaScript errors: '+errors.join(' | '));
           console.log('PASS: ERP central login form rendered without JavaScript exceptions');
+          const store = await browser.newPage();
+          const storeErrors=[];
+          store.on('pageerror',e=>{storeErrors.push(e.message);console.log('STORE PAGE ERROR:',e.stack||e.message)});
+          await store.goto('http://127.0.0.1:8765/tienda/',{waitUntil:'domcontentloaded'});
+          await store.locator('#btnProceedCheckout').waitFor({timeout:15000});
+          if(storeErrors.length) throw new Error('Store JavaScript errors: '+storeErrors.join(' | '));
+          console.log('PASS: CleanSur store renders without JavaScript exceptions');
           await browser.close();
           JS
