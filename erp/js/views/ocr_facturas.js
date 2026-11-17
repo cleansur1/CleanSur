@@ -156,6 +156,7 @@ export const OcrFacturasView = {
   isProcessing: false,
   processingStatus: '',
   uploadedFileName: '',
+  sourceFile: null,
   previewUrl: null,
   showImagePreview: false,
   hostContainer: null,
@@ -692,6 +693,7 @@ export const OcrFacturasView = {
               <span>El inventario aumentará en <strong>unidades de venta individual</strong> (bidones, botellas, unidades).</span>
             </div>
             <div class="flex items-center gap-3">
+              <button id="btn-save-ocr-pending" class="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-xs sm:text-sm">Guardar como pedido pendiente (sin stock)</button>
               <button id="btn-confirm-ocr-purchase" ${this.ocrRequiresReview || !inv.items?.length ? 'disabled title="Lectura incompleta: falta identificar y validar los productos"' : ''}
                 
                 class="px-5 py-2.5 ${this.ocrRequiresReview || !inv.items?.length ? 'opacity-40 cursor-not-allowed ' : ''}${reconciliation.status === 'DIFERENCIA' ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'} font-black rounded-xl text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2">
@@ -839,6 +841,7 @@ export const OcrFacturasView = {
     const allowed = files.every(f => f.type === 'application/pdf' || f.type.startsWith('image/') || /\.(pdf|png|jpe?g|webp)$/i.test(f.name));
     if (!allowed) { alert('Solo se admiten imágenes y PDF.'); return; }
     this.uploadedFileName = files.map(f => f.name).join(', ');
+    this.sourceFile = files.length === 1 ? files[0] : null;
     this.extractedInvoice = null;
     this.isProcessing = true;
     this.processingStatus = 'Leyendo contenido real de los archivos…';
@@ -1054,6 +1057,8 @@ export const OcrFacturasView = {
       });
     }
 
+    const pendingButton=document.getElementById('btn-save-ocr-pending');
+    if(pendingButton)pendingButton.addEventListener('click',()=>this.savePendingPurchase());
     const btnConfirm = document.getElementById('btn-confirm-ocr-purchase');
     if (btnConfirm) {
       btnConfirm.addEventListener('click', () => this.confirmExtractedPurchase());
@@ -1084,6 +1089,162 @@ export const OcrFacturasView = {
       if (window.lucide) window.lucide.createIcons();
       this.bindResultEvents();
     }
+  },
+
+
+  async savePendingPurchase() {
+    if(!this.extractedInvoice)return;
+    this.syncHeaderInputs();
+    const inv=this.extractedInvoice;
+    const token=sessionStorage.getItem('stayclean_staff_access_token');
+    if(!token){alert('Ingresá como personal autorizado.');return;}
+    try {
+      const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key,staycleanUploadPurchaseDocument}=await import('../supabase_public.js');
+      const rpc=async(name,payload={})=>{const r=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(payload)});const x=await r.json();if(!r.ok)throw Error(x.message||'Error de Supabase');return x;};
+      const lookup=await rpc('stayclean_staff_purchase_lookup');
+      const norm=x=>String(x||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');
+      const supplier=lookup.suppliers.find(p=>norm(p.cuit)===norm(inv.supplier_cuit)&&norm(inv.supplier_cuit).length===11)||lookup.suppliers.find(p=>norm(p.name)===norm(inv.supplier_name));
+      if(!supplier)throw Error('Proveedor nuevo: primero registralo desde el circuito autorizado de proveedores.');
+      const number=String(inv.invoice_number||'').trim();
+      if(!number)throw Error('Completá el número del pedido o factura.');
+      if(!inv.date)throw Error('Completá la fecha del documento antes de guardar.');
+      const items=(inv.items||[]).map(it=>({sku:String(it.code||'').trim(),description:String(it.description||it.commercial_name||'').trim(),quantity:Number(it.boxes_count??it.quantity),units_per_box:Number(it.units_per_box||1),unit_price:Number(it.unit_price),line_total:Number(it.line_total)}));
+      if(!items.length||items.some(it=>!it.sku||!it.description||!Number.isInteger(it.quantity)||it.quantity<=0||!Number.isInteger(it.units_per_box)||it.units_per_box<=0||!Number.isFinite(it.unit_price)||it.unit_price<0||!Number.isFinite(it.line_total)||it.line_total<0))throw Error('Revisá SKU, descripción, cajas, unidades por caja y costos de cada renglón.');
+      const total=Number(inv.invoice_stated_total);
+      if(!Number.isFinite(total)||total<=0)throw Error('Total inválido.');
+      const linesTotal=items.reduce((n,it)=>n+it.line_total,0);
+      if(Math.abs(linesTotal-total)>0.05)throw Error('La suma de los renglones no coincide con el total. Revisá descuentos, impuestos y cantidades.');
+      if(!this.sourceFile)throw Error('Subí un solo PDF o imagen para conservar el documento original.');
+      if(!confirm('Guardar '+number+' como PENDIENTE DE RECEPCIÓN por 
+    if(!this.extractedInvoice)return;
+    this.syncHeaderInputs();
+    const inv=this.extractedInvoice;
+    if(this.ocrRequiresReview || inv.key==='OCR_REAL_PENDIENTE_REVISION') {
+      notify('La factura requiere revisión antes de modificar inventario.','error');return;
+    }
+    const token=sessionStorage.getItem('stayclean_staff_access_token');
+    if(!token){notify('Ingresá como personal autorizado desde Ventas → Pedidos online.','error');return;}
+    try {
+      const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
+      const rpc=async(name,payload)=>{const r=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(payload)});const x=await r.json();if(!r.ok)throw Error(x.message||'Error de Supabase');return x;};
+      const lookup=await rpc('stayclean_staff_purchase_lookup',{});
+      if(!lookup?.products||!lookup?.suppliers)throw Error('No se pudo validar acceso de personal');
+      const normalize=x=>String(x||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');
+      let supplier=lookup.suppliers.find(p=>normalize(p.cuit)===normalize(inv.supplier_cuit)&&normalize(inv.supplier_cuit).length===11) || lookup.suppliers.find(p=>normalize(p.name)===normalize(inv.supplier_name));
+      if(!supplier){
+        const cuit=String(inv.supplier_cuit||'').replace(/\D/g,'');
+        if(cuit.length!==11)throw Error('Proveedor nuevo: revisá el CUIT de 11 dígitos en la factura.');
+        if(!confirm('Proveedor nuevo: '+inv.supplier_name+' (CUIT '+cuit+'). ¿Crear su ficha en Supabase?'))return;
+        supplier=await rpc('stayclean_staff_register_supplier',{p_supplier:{name:inv.supplier_name,cuit,address:inv.supplier_address||'',city:inv.supplier_city||''}});
+      }
+      const items=[];const seen=new Set();
+      for(const it of inv.items||[]){
+        const code=normalize(it.code);
+        if(!code)throw Error('Hay un artículo sin código SKU: requiere conciliación manual');
+        if(seen.has(code))throw Error('SKU repetido '+code+'. Consolidá las filas y verificá las cantidades recibidas.');
+        seen.add(code);
+        const matches=lookup.products.filter(p=>normalize(p.sku)===code);
+        if(matches.length>1)throw Error('SKU duplicado en catálogo central: '+code);
+        let product=matches[0];
+        if(!product){
+          const name=String(it.description||it.name||'').trim();
+          if(name.length<3)throw Error('Producto nuevo '+code+': falta descripción verificable.');
+          if(!confirm('Producto nuevo '+code+': '+name+'. ¿Crear ficha SIN publicar en la tienda y con precio pendiente?'))return;
+          const unit=prompt('Unidad VENDIBLE del producto '+code+' (ej.: bidón 5L, pack x3, unidad):','unidad');
+          if(!unit)return;
+          const factorText=prompt('Cantidad de unidades BASE que representa una unidad vendible (entero positivo):','1');
+          const factor=Number(factorText);
+          if(!Number.isInteger(factor)||factor<=0)throw Error('Factor de conversión inválido');
+          product=await rpc('stayclean_staff_register_product',{p_product:{sku:it.code,name,sale_unit:unit,sale_to_base_factor:factor}});
+        }
+        const boxes=Number(it.received_boxes ?? it.boxes_count ?? it.quantity);
+        const units=Number(it.units_per_box??1);
+        const quantity=boxes*units;
+        if(!Number.isInteger(quantity)||quantity<=0)throw Error('Cantidad recibida inválida en '+code);
+        const total=Number(it.line_total||0);
+        const cost=total/quantity;
+        if(!Number.isFinite(cost)||cost<0)throw Error('Costo inválido en '+code);
+        items.push({product_id:product.id,quantity_base:quantity,unit_cost:cost});
+      }
+      if(!items.length)throw Error('Factura sin productos válidos');
+      const invoice=String(inv.invoice_number||'').trim();
+      if(!invoice)throw Error('Número de factura requerido');
+      const id=crypto.randomUUID();
+      const message='Confirmar RECEPCIÓN CENTRAL de '+invoice+' ('+supplier.name+') con '+items.length+' productos y '+items.reduce((n,x)=>n+x.quantity_base,0)+' unidades base. Esta acción SUMA stock real y no se puede deshacer automáticamente.';
+      if(!window.confirm(message))return;
+      const result=await rpc('stayclean_staff_receive_purchase',{p_purchase:{request_id:id,supplier_id:supplier.id,invoice_number:invoice,notes:inv.notes||'',items}});
+      notify('Factura '+invoice+' recibida en Supabase. Stock central actualizado.','success');
+      this.extractedInvoice=null;if(window.app)window.app.navigate('compras');
+    }catch(err){console.error(err);notify('No se modificó el inventario: '+err.message,'error');}
+  },
+
+  loadAllTodayInvoicesBatch() {
+    const batch = [
+      buildEfaCombinedInvoice(),
+      JSON.parse(JSON.stringify(KNOWN_INVOICES.EL_TRIO)),
+      JSON.parse(JSON.stringify(KNOWN_INVOICES.SYS_7572))
+    ];
+
+    let loadedCount = 0;
+    const existingPurchases = db.getPurchases().filter(p => p.status !== 'ANULADA');
+
+    batch.forEach(inv => {
+      const alreadyExists = existingPurchases.some(
+        p => String(p.invoice_number || '').trim().toUpperCase() === String(inv.invoice_number || '').trim().toUpperCase()
+      );
+      if (!alreadyExists) {
+        db.createPurchase({
+          supplier_name: inv.supplier_name,
+          supplier_cuit: inv.supplier_cuit,
+          supplier_address: inv.supplier_address,
+          supplier_phone: inv.supplier_phone,
+          supplier_email: inv.supplier_email,
+          invoice_number: inv.invoice_number,
+          invoice_type: inv.invoice_type,
+          cae: inv.cae || '',
+          date: inv.date,
+          payment_condition: inv.payment_condition,
+          discount_pct: Number(inv.discount_pct) || 0,
+          vat_included: inv.vat_included !== false,
+          vat_rate: inv.vat_included === false ? 21 : 0,
+          total_logistics: 0,
+          invoice_stated_total: inv.invoice_stated_total,
+          notes: inv.notes || '',
+          items: inv.items.map(it => ({
+            code: it.code,
+            product_name: it.description,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            discount_pct: it.discount_pct
+          }))
+        });
+        loadedCount++;
+      }
+    });
+
+    if (loadedCount === 0) {
+      notify('Las 3 facturas de demostración ya estaban cargadas en tu base de datos.', 'info');
+    } else {
+      notify(`¡Se cargaron ${loadedCount} facturas de demostración (3 proveedores y 12 artículos en Stock y Tienda Nube)!`, 'success');
+    }
+
+    if (window.app) {
+      window.app.navigate('compras');
+    }
+  }
+};
++total.toLocaleString('es-AR')+'? No se modificará el stock.'))return;
+      const result=await rpc('stayclean_staff_pending_purchase',{p_data:{supplier_id:supplier.id,document_number:number,document_date:inv.date,document_type:/^PED/i.test(number)?'PEDIDO':'COMPROBANTE',items,total,notes:inv.notes||''}});
+      const extension=(this.sourceFile.name.split('.').pop()||'pdf').toLowerCase().replace(/[^a-z0-9]/g,'');
+      const path=result.id+'/original.'+extension;
+      try {
+        await staycleanUploadPurchaseDocument(this.sourceFile,path);
+        await rpc('stayclean_staff_attach_pending_document',{p_id:result.id,p_path:path});
+        alert('Pedido pendiente y documento original guardados. Stock sin cambios.');
+      }catch(uploadError){alert('Pedido registrado sin modificar stock, pero NO se pudo adjuntar el archivo: '+uploadError.message+'; pedido '+result.id);}
+      this.extractedInvoice=null;this.sourceFile=null;
+      if(window.app)window.app.navigate('compras',{action:'pending'});
+    }catch(error){alert('No se guardó el pedido: '+error.message);}
   },
 
   async confirmExtractedPurchase() {
