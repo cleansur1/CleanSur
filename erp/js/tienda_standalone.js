@@ -715,6 +715,7 @@ class TiendaStandaloneApp {
     const token=await staycleanAuthToken();
     if(!token){alert('Iniciá sesión antes de pagar.');await this.openAccountDialog();return;}
     if(!this.customerProfile?.name||!this.customerProfile?.phone||!this.customerProfile?.address){this.openProfileModal();return;}
+    if(!confirm('Mercado Pago está en fase de pruebas. No uses dinero real hasta que se confirme el circuito completo de acreditación y stock. ¿Continuar con la prueba?'))return;
     this.sendingOrder=true;
     const requestId=this.pendingRequestId||(this.pendingRequestId=crypto.randomUUID());
     sessionStorage.setItem('stayclean_pending_order_id',requestId);
@@ -843,7 +844,7 @@ class TiendaStandaloneApp {
           <select id="checkoutPaymentMethod" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
             <option value="Efectivo contra entrega">Efectivo contra entrega en Caviahue</option>
             <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
-            <option value="Mercado Pago">Mercado Pago (pago online)</option>
+            <option value="Mercado Pago">Mercado Pago (integración en pruebas)</option>
             <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
           </select>
         </div>
