@@ -776,6 +776,19 @@ export const OcrFacturasView = {
         rows.push({code:m[1],description:m[5].trim(),quantity:qty,boxes_count:qty,unit_price:price,line_total:total,discount_pct:0});
       }
     }
+    // SYS 7601: columnas en orden CODIGO DESCRIPCION CANTIDAD PRECIO UNIT. TOTAL.
+    // El parser general anterior exige un orden distinto en algunos PDF.
+    if (!rows.length) {
+      const lineRe = /^\s*(200\d{4})\s+(CAJA\s+[^\n]+?)\s+(\d{1,3})\s+\$\s*([\d.]+,\d{2})\s+\$\s*([\d.]+,\d{2})\s*$/gim;
+      for (const m of text.matchAll(lineRe)) {
+        const qty=Number(m[3]),price=money(m[4]),lineTotal=money(m[5]);
+        if (Math.abs(qty*price-lineTotal)>0.03) continue;
+        const pack=m[2].match(/(\d+)\s+UNID\s+X\s+(\d+)\s*LTS?/i);
+        rows.push({code:m[1],description:m[2].trim(),quantity:qty,boxes_count:qty,
+          units_per_box:pack?Number(pack[1]):1,unit_price:price,line_total:lineTotal,
+          discount_pct:0,pricing_mode:'PER_BOX'});
+      }
+    }
     // Reglas verificadas contra el pedido físico y la conciliación de Antigravity.
     for (const row of rows) {
       if (row.code === '2000156') {
@@ -915,7 +928,13 @@ export const OcrFacturasView = {
       this.ocrRawText = allText;
       if (this.ocrSupplierClaims?.length) this.ocrRawText += '\n\nRECLAMO: segundo renglón 2000085 — 1 caja no entregada, $141.050. Excluido de artículos recibidos.';
       this.ocrPreviewLines = lines;
-      this.ocrRequiresReview = true;
+      // Sólo habilitar confirmación cuando la lectura de SYS es íntegra y conciliada.
+      const parsedTotal=(sysParsed?.rows||[]).reduce((sum,row)=>sum+Number(row.line_total||0),0);
+      const validSys = !!sysParsed && !!sysParsed.orderNumber && sysParsed.rows.length>0 &&
+        sysParsed.rows.every(row=>row.code && row.description && Number(row.quantity)>0 && Number(row.units_per_box)>0) &&
+        !sysParsed.duplicates.length && Number.isFinite(total) && total>0 && Math.abs(parsedTotal-total)<0.02;
+      this.ocrRequiresReview = !validSys;
+      if (validSys) this.extractedInvoice.key='OCR_SYS_VALIDADO';
       this.isProcessing = false;
       this.refreshResultView();
       alert(sysParsed ? ('Pedido SYS: ' + sysParsed.rows.length + ' renglones detectados. ' + (sysParsed.duplicates.length ? 'Códigos repetidos: ' + sysParsed.duplicates.join(', ') + '. ' : '') + 'Revisá el documento. El registro sigue bloqueado.') : 'Texto extraído del documento real. El formato de productos aún no se reconoce automáticamente; no se modificó stock.');
