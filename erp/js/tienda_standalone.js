@@ -683,9 +683,8 @@ class TiendaStandaloneApp {
     const params=new URLSearchParams(location.search);
     const state=params.get('mp'), requestId=params.get('request_id');
     if(!state || !requestId) return;
-    history.replaceState(null,'',location.pathname);
     const token=await staycleanAuthToken();
-    if(!token){alert('Iniciá sesión para consultar el resultado de tu pago. No vuelvas a pagar hasta verificarlo.');return;}
+    if(!token){alert('Iniciá sesión para consultar el resultado de tu pago. Conservamos el enlace de retorno para que puedas verificarlo. No vuelvas a pagar hasta hacerlo.');return;}
     try {
       const res=await fetch(STAYCLEAN_SUPABASE_URL+'/functions/v1/get-mp-checkout-status',{
         method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},
@@ -694,10 +693,11 @@ class TiendaStandaloneApp {
       const data=await res.json();
       if(!res.ok) throw Error(data.error||'No se pudo consultar el pago');
       if(data.status==='approved'||data.status==='paid'||data.status==='completed'){
+        history.replaceState(null,'',location.pathname);
         this.cart=[];this.saveCart();this.pendingRequestId=null;sessionStorage.removeItem('stayclean_pending_order_id');
         alert('Pago aprobado. Pedido '+(data.order_number||'registrado')+'. Podés verlo desde Mi cuenta → PEDIDOS.');
       } else {
-        alert('Estado del pago: '+(data.mp_status||data.status||'pendiente')+'. No repitas el pago hasta verificar su estado.');
+        alert('Estado del pago: '+(data.mp_status||data.status||'pendiente')+'. Conservá este enlace para volver a consultar. No repitas el pago hasta verificar su estado.');
       }
     } catch(e){alert('No pudimos verificar el pago: '+e.message+'. Consultá el pedido antes de intentar pagar nuevamente.');}
   }
@@ -726,7 +726,8 @@ class TiendaStandaloneApp {
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw Error(data.error||data.detail||'Mercado Pago no pudo iniciar el pago');
-      if(!/^https:\/\//i.test(data.checkout_url||''))throw Error('El servidor no devolvió un enlace de pago seguro');
+      const checkout=new URL(data.checkout_url||'');
+      if(checkout.protocol!=='https:' || !/(^|\\.)mercadopago\\.com(\\.ar)?$/.test(checkout.hostname))throw Error('Mercado Pago no devolvió un enlace de pago válido');
       location.assign(data.checkout_url);
     }catch(e){alert('No se inició el pago ni se confirmó el pedido: '+e.message);}
     finally{this.sendingOrder=false;}
