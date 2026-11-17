@@ -693,7 +693,6 @@ export const OcrFacturasView = {
               <span>El inventario aumentará en <strong>unidades de venta individual</strong> (bidones, botellas, unidades).</span>
             </div>
             <div class="flex items-center gap-3">
-              <button id="btn-save-ocr-pending" type="button" class="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-black rounded-xl text-xs sm:text-sm shadow-md">Guardar comprobante en Supabase SIN ingresar stock</button>
               <button id="btn-confirm-ocr-purchase" ${this.ocrRequiresReview || !inv.items?.length ? 'disabled title="Lectura incompleta: falta identificar y validar los productos"' : ''}
                 
                 class="px-5 py-2.5 ${this.ocrRequiresReview || !inv.items?.length ? 'opacity-40 cursor-not-allowed ' : ''}${reconciliation.status === 'DIFERENCIA' ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'} font-black rounded-xl text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2">
@@ -1048,8 +1047,6 @@ export const OcrFacturasView = {
       });
     }
 
-    const btnPending = document.getElementById('btn-save-ocr-pending');
-    if (btnPending) btnPending.addEventListener('click', () => this.savePendingPurchase());
 
     const btnConfirm = document.getElementById('btn-confirm-ocr-purchase');
     if (btnConfirm) {
@@ -1083,111 +1080,67 @@ export const OcrFacturasView = {
     }
   },
 
-  async savePendingPurchase() {
+  async confirmExtractedPurchase() {
+    if(!this.extractedInvoice)return;
     this.syncHeaderInputs();
     const inv=this.extractedInvoice;
-    const file=this.uploadedFiles?.[0];
-    if (!inv || !file || this.uploadedFiles.length!==1) { notify('Seleccioná un único PDF o imagen y revisá la lectura.', 'error'); return; }
+    if(this.ocrRequiresReview || inv.key==='OCR_REAL_PENDIENTE_REVISION') {
+      notify('La factura requiere revisión antes de modificar inventario.','error');return;
+    }
     const token=sessionStorage.getItem('stayclean_staff_access_token');
-    if (!token) { notify('Necesitás iniciar sesión como personal autorizado en Supabase.', 'error'); return; }
-    const number=String(inv.invoice_number||'').trim();
-    const name=String(inv.supplier_name||'').trim();
-    const total=Number(inv.invoice_stated_total);
-    const rows=(inv.items||[]).map((x,i)=>({line:i+1,code:String(x.code||''),description:String(x.description||x.commercial_name||''),quantity:Number(x.quantity||x.boxes_count||0),unit_price:Number(x.unit_price||0),line_total:Number(x.line_total||0),received_quantity:0}));
-    if (!number || !name || !Number.isFinite(total) || total<=0 || !rows.length || rows.some(x=>!x.description||x.quantity<=0)) {
-      notify('Completá número, proveedor, total y todos los productos antes de guardar.', 'error');return;
-    }
-    if (file.size>12*1024*1024) { notify('Archivo mayor a 12 MB.', 'error');return; }
-    const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
-    const headers={apikey:key,Authorization:'Bearer '+token};
-    const request=async(path,options={})=>{
-      const res=await fetch(base+path,{...options,headers:{...headers,...(options.headers||{})}});
-      if(!res.ok)throw Error('Supabase '+res.status+': '+(await res.text()).slice(0,250));
-      return res.status===204?null:res.json();
-    };
-    const btn=document.getElementById('btn-save-ocr-pending');
-    if(btn)btn.disabled=true;
+    if(!token){notify('Ingresá como personal autorizado desde Ventas → Pedidos online.','error');return;}
     try {
-      const lookup=await request('/rest/v1/rpc/stayclean_staff_purchase_lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-      const norm=s=>String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');
-      const supplier=(lookup.suppliers||[]).find(s=>norm(inv.supplier_cuit).length===11&&norm(s.cuit)===norm(inv.supplier_cuit))||
-        (lookup.suppliers||[]).find(s=>norm(s.name)===norm(name));
-      if(!supplier)throw Error('Proveedor no identificado en Supabase: revisá nombre y CUIT.');
-      const query=encodeURIComponent(number);
-      const existing=await request('/rest/v1/purchases?select=id&invoice_number=ilike.'+query+'&limit=1');
-      if(existing?.length)throw Error('Ya existe una compra confirmada con este número.');
-      const pending=await request('/rest/v1/stayclean_pending_purchases?select=id&supplier_id=eq.'+encodeURIComponent(supplier.id)+'&document_number=ilike.'+query+'&limit=1');
-      if(pending?.length)throw Error('El documento ya existe como compra pendiente.');
-      const type=/^PED[-\s#]*\d+/i.test(number)||/PEDIDO/i.test(String(inv.invoice_type||''))?'PEDIDO':'FACTURA';
-      if(!confirm('Guardar '+type+' '+number+' por 
-
-  loadAllTodayInvoicesBatch() {
-    const batch = [
-      buildEfaCombinedInvoice(),
-      JSON.parse(JSON.stringify(KNOWN_INVOICES.EL_TRIO)),
-      JSON.parse(JSON.stringify(KNOWN_INVOICES.SYS_7572))
-    ];
-
-    let loadedCount = 0;
-    const existingPurchases = db.getPurchases().filter(p => p.status !== 'ANULADA');
-
-    batch.forEach(inv => {
-      const alreadyExists = existingPurchases.some(
-        p => String(p.invoice_number || '').trim().toUpperCase() === String(inv.invoice_number || '').trim().toUpperCase()
-      );
-      if (!alreadyExists) {
-        db.createPurchase({
-          supplier_name: inv.supplier_name,
-          supplier_cuit: inv.supplier_cuit,
-          supplier_address: inv.supplier_address,
-          supplier_phone: inv.supplier_phone,
-          supplier_email: inv.supplier_email,
-          invoice_number: inv.invoice_number,
-          invoice_type: inv.invoice_type,
-          cae: inv.cae || '',
-          date: inv.date,
-          payment_condition: inv.payment_condition,
-          discount_pct: Number(inv.discount_pct) || 0,
-          vat_included: inv.vat_included !== false,
-          vat_rate: inv.vat_included === false ? 21 : 0,
-          total_logistics: 0,
-          invoice_stated_total: inv.invoice_stated_total,
-          notes: inv.notes || '',
-          items: inv.items.map(it => ({
-            code: it.code,
-            product_name: it.description,
-            quantity: it.quantity,
-            unit_price: it.unit_price,
-            discount_pct: it.discount_pct
-          }))
-        });
-        loadedCount++;
+      const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
+      const rpc=async(name,payload)=>{const r=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(payload)});const x=await r.json();if(!r.ok)throw Error(x.message||'Error de Supabase');return x;};
+      const lookup=await rpc('stayclean_staff_purchase_lookup',{});
+      if(!lookup?.products||!lookup?.suppliers)throw Error('No se pudo validar acceso de personal');
+      const normalize=x=>String(x||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');
+      let supplier=lookup.suppliers.find(p=>normalize(p.cuit)===normalize(inv.supplier_cuit)&&normalize(inv.supplier_cuit).length===11) || lookup.suppliers.find(p=>normalize(p.name)===normalize(inv.supplier_name));
+      if(!supplier){
+        const cuit=String(inv.supplier_cuit||'').replace(/\D/g,'');
+        if(cuit.length!==11)throw Error('Proveedor nuevo: revisá el CUIT de 11 dígitos en la factura.');
+        if(!confirm('Proveedor nuevo: '+inv.supplier_name+' (CUIT '+cuit+'). ¿Crear su ficha en Supabase?'))return;
+        supplier=await rpc('stayclean_staff_register_supplier',{p_supplier:{name:inv.supplier_name,cuit,address:inv.supplier_address||'',city:inv.supplier_city||''}});
       }
-    });
-
-    if (loadedCount === 0) {
-      notify('Las 3 facturas de demostración ya estaban cargadas en tu base de datos.', 'info');
-    } else {
-      notify(`¡Se cargaron ${loadedCount} facturas de demostración (3 proveedores y 12 artículos en Stock y Tienda Nube)!`, 'success');
-    }
-
-    if (window.app) {
-      window.app.navigate('compras');
-    }
-  }
-};
-
-+total.toLocaleString('es-AR')+' como PENDIENTE, sin modificar stock?'))return;
+      const items=[];const seen=new Set();
+      for(const it of inv.items||[]){
+        const code=normalize(it.code);
+        if(!code)throw Error('Hay un artículo sin código SKU: requiere conciliación manual');
+        if(seen.has(code))throw Error('SKU repetido '+code+'. Consolidá las filas y verificá las cantidades recibidas.');
+        seen.add(code);
+        const matches=lookup.products.filter(p=>normalize(p.sku)===code);
+        if(matches.length>1)throw Error('SKU duplicado en catálogo central: '+code);
+        let product=matches[0];
+        if(!product){
+          const name=String(it.description||it.name||'').trim();
+          if(name.length<3)throw Error('Producto nuevo '+code+': falta descripción verificable.');
+          if(!confirm('Producto nuevo '+code+': '+name+'. ¿Crear ficha SIN publicar en la tienda y con precio pendiente?'))return;
+          const unit=prompt('Unidad VENDIBLE del producto '+code+' (ej.: bidón 5L, pack x3, unidad):','unidad');
+          if(!unit)return;
+          const factorText=prompt('Cantidad de unidades BASE que representa una unidad vendible (entero positivo):','1');
+          const factor=Number(factorText);
+          if(!Number.isInteger(factor)||factor<=0)throw Error('Factor de conversión inválido');
+          product=await rpc('stayclean_staff_register_product',{p_product:{sku:it.code,name,sale_unit:unit,sale_to_base_factor:factor}});
+        }
+        const boxes=Number(it.received_boxes ?? it.boxes_count ?? it.quantity);
+        const units=Number(it.units_per_box??1);
+        const quantity=boxes*units;
+        if(!Number.isInteger(quantity)||quantity<=0)throw Error('Cantidad recibida inválida en '+code);
+        const total=Number(it.line_total||0);
+        const cost=total/quantity;
+        if(!Number.isFinite(cost)||cost<0)throw Error('Costo inválido en '+code);
+        items.push({product_id:product.id,quantity_base:quantity,unit_cost:cost});
+      }
+      if(!items.length)throw Error('Factura sin productos válidos');
+      const invoice=String(inv.invoice_number||'').trim();
+      if(!invoice)throw Error('Número de factura requerido');
       const id=crypto.randomUUID();
-      const path='ocr/'+id+'/'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100);
-      const uploaded=await fetch(base+'/storage/v1/object/stayclean-purchase-documents/'+path,{method:'POST',headers:{...headers,'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file});
-      if(!uploaded.ok)throw Error('Falló almacenamiento del original: '+(await uploaded.text()).slice(0,250));
-      await request('/rest/v1/stayclean_pending_purchases',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({id,supplier_id:supplier.id,document_number:number,document_date:inv.date||null,document_type:type,items:rows,total,status:'PENDIENTE_RECEPCION',document_path:path,notes:'Cargado por OCR. Pendiente de verificación física. No actualizar stock automáticamente.'})});
-      notify('Comprobante guardado en Supabase. Recepción pendiente, stock sin cambios.','success');
-      this.extractedInvoice=null;this.uploadedFiles=[];
-      if(window.app)window.app.navigate('compras');
-    }catch(error){console.error(error);notify('No se guardó la compra pendiente: '+error.message,'error');}
-    finally{if(btn)btn.disabled=false;}
+      const message='Confirmar RECEPCIÓN CENTRAL de '+invoice+' ('+supplier.name+') con '+items.length+' productos y '+items.reduce((n,x)=>n+x.quantity_base,0)+' unidades base. Esta acción SUMA stock real y no se puede deshacer automáticamente.';
+      if(!window.confirm(message))return;
+      const result=await rpc('stayclean_staff_receive_purchase',{p_purchase:{request_id:id,supplier_id:supplier.id,invoice_number:invoice,notes:inv.notes||'',items}});
+      notify('Factura '+invoice+' recibida en Supabase. Stock central actualizado.','success');
+      this.extractedInvoice=null;if(window.app)window.app.navigate('compras');
+    }catch(err){console.error(err);notify('No se modificó el inventario: '+err.message,'error');}
   },
 
   loadAllTodayInvoicesBatch() {
@@ -1245,4 +1198,3 @@ export const OcrFacturasView = {
     }
   }
 };
-
