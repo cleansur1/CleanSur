@@ -12,45 +12,83 @@ let chartRentabilidad = null;
 export const DashboardView = {
   renderCentral(container) {
     const data = window.app?.centralDashboard || {};
-    const integer = value => new Intl.NumberFormat('es-AR').format(Number(value) || 0);
-    const money = value => new Intl.NumberFormat('es-AR', {style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(value) || 0);
-    const stats = [
-      ['Productos', integer(data.products), 'package'],
-      ['Unidades en stock', integer(data.stock), 'boxes'],
-      ['Valor del stock', money(data.stock_value), 'wallet'],
-      ['Compras registradas', integer(data.purchases), 'truck'],
-      ['Total compras', money(data.purchases_total), 'receipt'],
-      ['Ventas registradas', integer(data.sales), 'shopping-cart'],
-      ['Total ventas', money(data.sales_total), 'chart-no-axes-column'],
-      ['Pedidos', integer(data.orders), 'clipboard-list'],
-      ['Clientes', integer(data.customers), 'users'],
-      ['Productos en mínimo', integer(data.low_stock), 'alert-triangle']
+    const fmt = value => new Intl.NumberFormat('es-AR').format(Number(value) || 0);
+    const money = value => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(value) || 0);
+    const products = db.getProducts() || [];
+    const low = products.filter(p => Number(p.current_stock) > 0 && Number(p.current_stock) <= Number(p.min_stock || 0));
+    const out = products.filter(p => Number(p.current_stock) <= 0);
+    const inventorySale = products.reduce((sum,p)=>sum+Math.max(0,Number(p.current_stock)||0)*(Number(p.sale_price)||0),0);
+    const tiles = [
+      {label:'Ventas registradas',value:money(data.sales_total),detail:fmt(data.sales)+' operaciones',icon:'trending-up',tone:'emerald'},
+      {label:'Compras registradas',value:money(data.purchases_total),detail:fmt(data.purchases)+' compras',icon:'package-check',tone:'blue'},
+      {label:'Stock valorizado (costo)',value:money(data.stock_value),detail:'Valor de inventario',icon:'warehouse',tone:'cyan'},
+      {label:'Stock valorizado (venta)',value:money(inventorySale),detail:'Valor potencial, no utilidad',icon:'badge-dollar-sign',tone:'indigo'},
+      {label:'Productos',value:fmt(data.products),detail:fmt(data.stock)+' unidades en stock',icon:'package',tone:'blue'},
+      {label:'Pedidos',value:fmt(data.orders),detail:'Pedidos registrados',icon:'clipboard-list',tone:'amber'}
+    ];
+    const secondary = [
+      {label:'Clientes',value:fmt(data.customers),icon:'users'},
+      {label:'Unidades disponibles',value:fmt(data.stock),icon:'boxes'},
+      {label:'Productos con stock bajo',value:fmt(low.length),icon:'alert-triangle'},
+      {label:'Productos sin stock',value:fmt(out.length),icon:'package-x'}
     ];
     container.innerHTML = `
-      <section class="space-y-6">
-        <div class="bg-white p-6 rounded-xl border border-slate-200">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 class="text-2xl font-bold text-[#0E3A6B]">Panel de control · CleanSur</h1>
-              <p class="text-sm text-slate-500 mt-2">Indicadores obtenidos de Supabase. Vista central de solo lectura.</p>
+      <div class="space-y-6 animate-fade-in">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#8FD0F4]/40 shadow-sm">
+          <div>
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#E9F4FB] text-[#0E3A6B] border border-[#8FD0F4]">CleanSur · Caviahue y Copahue</span>
+            <h1 class="text-2xl font-black text-[#0E3A6B] tracking-tight mt-2">Panel de Control & Indicadores</h1>
+            <p class="text-xs text-slate-500 mt-1">Resumen general de operaciones e inventario centralizado en Supabase.</p>
+          </div>
+          <span class="text-xs font-semibold px-3 py-2 rounded-lg bg-[#E9F4FB] text-[#0E3A6B]">Datos centrales · Totales acumulados</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+          ${tiles.map(t=>`<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition min-w-0">
+            <div class="flex items-center justify-between text-slate-500 mb-2 gap-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wide">${t.label}</span>
+              <div class="w-8 h-8 shrink-0 rounded-lg bg-${t.tone}-50 text-${t.tone}-600 flex items-center justify-center"><i data-lucide="${t.icon}" class="w-4 h-4"></i></div>
             </div>
-            <span class="text-xs font-semibold px-3 py-2 rounded-lg bg-[#E9F4FB] text-[#0E3A6B]">Datos centralizados</span>
+            <div class="text-lg xl:text-xl font-bold text-slate-800 break-words">${t.value}</div>
+            <div class="text-[11px] text-slate-500 mt-1">${t.detail}</div>
+          </div>`).join('')}
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+          ${secondary.map(t=>`<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center gap-3">
+            <div class="w-10 h-10 shrink-0 rounded-lg bg-[#E9F4FB] text-[#0E3A6B] flex items-center justify-center"><i data-lucide="${t.icon}" class="w-5 h-5"></i></div>
+            <div><div class="text-xs text-slate-500 font-medium">${t.label}</div><div class="text-base font-bold text-slate-800">${t.value}</div></div>
+          </div>`).join('')}
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2"><i data-lucide="bell-ring" class="w-5 h-5 text-amber-600"></i><h2 class="text-base font-bold text-slate-800">Panel de Alertas y Atención Inmediata</h2></div>
+            <span class="text-xs px-2.5 py-1 bg-amber-50 text-amber-700 font-semibold rounded-full border border-amber-200">${fmt(low.length+out.length)} alertas de stock</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="p-4 rounded-lg border border-amber-200 bg-amber-50/50"><div class="text-xs text-amber-800 font-semibold">Stock bajo</div><div class="text-2xl font-bold text-amber-700 mt-2">${fmt(low.length)}</div><div class="text-xs text-slate-500 mt-1">Productos bajo el mínimo configurado</div></div>
+            <div class="p-4 rounded-lg border border-rose-200 bg-rose-50/50"><div class="text-xs text-rose-800 font-semibold">Sin stock</div><div class="text-2xl font-bold text-rose-700 mt-2">${fmt(out.length)}</div><div class="text-xs text-slate-500 mt-1">Productos sin unidades disponibles</div></div>
+            <div class="p-4 rounded-lg border border-blue-200 bg-blue-50/50"><div class="text-xs text-blue-800 font-semibold">Inventario</div><div class="text-2xl font-bold text-blue-700 mt-2">${fmt(data.stock)}</div><div class="text-xs text-slate-500 mt-1">Unidades registradas en Supabase</div></div>
           </div>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          ${stats.map(([label,value,icon]) => `
-            <article class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-              <div class="flex items-center gap-2 text-slate-500 text-xs font-semibold">
-                <i data-lucide="${icon}" class="w-4 h-4"></i><span>${label}</span>
-              </div>
-              <div class="text-xl font-extrabold text-[#0E3A6B] mt-3 break-words">${value}</div>
-            </article>`).join('')}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h2 class="text-base font-bold text-slate-800 mb-3">Resumen comercial</h2>
+            <div class="divide-y divide-slate-100 text-sm">
+              <div class="flex justify-between py-3"><span class="text-slate-500">Ventas acumuladas</span><strong>${money(data.sales_total)}</strong></div>
+              <div class="flex justify-between py-3"><span class="text-slate-500">Compras acumuladas</span><strong>${money(data.purchases_total)}</strong></div>
+              <div class="flex justify-between py-3"><span class="text-slate-500">Clientes registrados</span><strong>${fmt(data.customers)}</strong></div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h2 class="text-base font-bold text-slate-800 mb-3">Resumen de inventario</h2>
+            <div class="divide-y divide-slate-100 text-sm">
+              <div class="flex justify-between py-3"><span class="text-slate-500">Productos registrados</span><strong>${fmt(data.products)}</strong></div>
+              <div class="flex justify-between py-3"><span class="text-slate-500">Stock a costo</span><strong>${money(data.stock_value)}</strong></div>
+              <div class="flex justify-between py-3"><span class="text-slate-500">Stock a precio de venta</span><strong>${money(inventorySale)}</strong></div>
+            </div>
+          </div>
         </div>
-        <div class="bg-[#E9F4FB] rounded-xl p-4 text-sm text-[#0E3A6B]">
-          Esta pantalla no permite modificar inventario ni registrar movimientos.
-          Para consultar productos, abrí el módulo Productos desde el menú.
-        </div>
-      </section>`;
+        <p class="text-xs text-slate-500">Los indicadores son acumulados, no corresponden exclusivamente al mes actual. Los márgenes, resultados y gráficos históricos se reincorporarán cuando sus cálculos estén validados contra Supabase.</p>
+      </div>`;
     if (window.lucide) window.lucide.createIcons();
   },
 
