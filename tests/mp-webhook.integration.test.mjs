@@ -20,9 +20,9 @@ function signature(dataId, requestId, secret='test-secret') {
   const manifest=`id:${dataId.toLowerCase()};request-id:${requestId};ts:${ts};`;
   return `ts=${ts},v1=${createHmac('sha256', secret).update(manifest).digest('hex')}`;
 }
-function setup({status='processed',detail='accredited',stockReview=false,dbError=false}={}) {
+function setup({status='processed',detail='accredited',stockReview=false,dbError=false,liveMode=false}={}) {
   const state={finalizations:0,updates:0,fetches:0,intentStatus:'pending',orderId:'order-123'};
-  const mpOrder={id:'order-123',live_mode:false,external_reference:'11111111-1111-4111-8111-111111111111',status,status_detail:detail,total_paid_amount:100};
+  const mpOrder={id:'order-123',live_mode:liveMode,external_reference:'11111111-1111-4111-8111-111111111111',status,status_detail:detail,total_paid_amount:100};
   const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:mpOrder.external_reference,mp_order_id:state.orderId,status:state.intentStatus},error:null})})}),update:()=>({eq:()=>({eq:async()=>{state.updates++;return {error:dbError?{message:'db unavailable'}:null}}})})}),rpc:async()=>{state.finalizations++;if(!stockReview && !dbError)state.intentStatus='approved';if(stockReview)state.intentStatus='fulfillment_review';return {data:stockReview?{requires_manual_review:true}:{success:true},error:dbError?{message:'db unavailable'}:null}}};
   let handler;
   const ctx={Deno:{env:{get:k=>({MERCADOPAGO_ACCESS_TOKEN:'fake',MERCADOPAGO_WEBHOOK_SECRET:'test-secret',SUPABASE_URL:'https://example.invalid',SUPABASE_SERVICE_ROLE_KEY:'fake'})[k]},serve:fn=>{handler=fn}},createClient:()=>admin,fetch:async()=>{state.fetches++;return {ok:true,json:async()=>mpOrder}},Response,URL,TextEncoder,Uint8Array,crypto:webcrypto,console};
@@ -38,3 +38,6 @@ test('database update error requests webhook retry',async()=>{const x=setup({sta
 test('paid but unavailable stock enters review without retry storm',async()=>{const x=setup({stockReview:true});assert.equal((await x.send()).status,200);assert.equal((await x.send()).status,200);assert.equal(x.state.finalizations,1)});
 test('database finalization error requests retry',async()=>{const x=setup({dbError:true});assert.equal((await x.send()).status,500)});
 test('non-POST request is rejected',async()=>{const x=setup();assert.equal((await x.send({method:'GET'})).status,405)});
+
+test('signed live-mode payment finalizes when configured credentials can retrieve it',async()=>{const x=setup({liveMode:true});assert.equal((await x.send()).status,200);assert.equal(x.state.finalizations,1)});
+test('mismatched Mercado Pago order is ignored',async()=>{const x=setup();x.state.orderId='another-order';assert.equal((await x.send()).status,200);assert.equal(x.state.finalizations,0)});
