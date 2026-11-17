@@ -830,8 +830,12 @@ class TiendaStandaloneApp {
         sessionStorage.removeItem('stayclean_pending_mp_order_id');
         await this.loadProducts();
         alert('¡Pago aprobado! Pedido ' + status.order_number + ' registrado correctamente en StayClean.');
-      } else if (status.status === 'pending') {
-        alert('El pago todavía está pendiente de confirmación. No vuelvas a pagar; podés consultar el estado desde tu cuenta.');
+      } else if (status.status === 'pending' || status.status === 'fulfillment_review') {
+        if (status.status === 'fulfillment_review') {
+          alert('Tu pago fue acreditado, pero el pedido requiere revisión manual de stock. No vuelvas a pagar. Contactá a StayClean e indicá el identificador ' + requestId + '.');
+        } else {
+          alert('El pago todavía está pendiente de confirmación. No vuelvas a pagar; podés consultar el estado desde tu cuenta.');
+        }
       } else {
         sessionStorage.removeItem('stayclean_pending_mp_order_id');
         alert('El pago no figura aprobado. Tu carrito se conserva para que puedas volver a intentarlo.');
