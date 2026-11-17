@@ -1,0 +1,33 @@
+name: CleanSur ERP browser smoke test
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install chromium --with-deps
+      - name: Verify ERP login renders without JavaScript exceptions
+        run: |
+          python3 -m http.server 8765 >/tmp/cleansur-server.log 2>&1 &
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless:true});
+          const page = await browser.newPage();
+          const errors=[];
+          page.on('pageerror', e => errors.push(e.message));
+          await page.goto('http://127.0.0.1:8765/erp/?central=1&v=smoke', {waitUntil:'domcontentloaded'});
+          await page.locator('#central-form').waitFor({timeout:30000});
+          if(errors.length) throw new Error('JavaScript errors: '+errors.join(' | '));
+          console.log('PASS: ERP central login form rendered without JavaScript exceptions');
+          await browser.close();
+          JS
