@@ -104,13 +104,13 @@ Deno.serve(async (req: Request) => {
       }
       if (data?.requires_manual_review) {
         console.error("Paid StayClean order requires manual stock review", intent.id);
-        return response(500, "paid order requires manual review");
+        return response(200, "payment accredited; fulfillment requires manual review");
       }
       return response(200, "payment confirmed");
     }
 
     if (["canceled", "failed"].includes(mpOrder.status)) {
-      await admin.from("stayclean_mp_payment_intents")
+      const { error: statusUpdateError } = await admin.from("stayclean_mp_payment_intents")
         .update({
           status: mpOrder.status === "canceled" ? "cancelled" : "rejected",
           mp_status: mpOrder.status,
@@ -119,6 +119,10 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", intent.id)
         .eq("status", "pending");
+      if (statusUpdateError) {
+        console.error("Could not persist failed/cancelled MP status", statusUpdateError);
+        return response(500, "payment status update needs retry");
+      }
     }
     return response(200, "notification received");
   } catch (error) {
