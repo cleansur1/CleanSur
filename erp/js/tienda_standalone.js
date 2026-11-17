@@ -81,16 +81,80 @@ class TiendaStandaloneApp {
       if(cmd==='PEDIDOS'){await this.showOrderReceipts();return;}
       if(cmd==='PERFIL'){this.openProfileModal();return;}
       if(cmd==='RECUPERAR'){const email=prompt('Correo de tu cuenta');if(email){await staycleanAuthReset(email);alert('Si existe una cuenta, recibirás instrucciones por correo.')}return;}
-      if(cmd==='REGISTRO'||cmd==='INGRESAR'){
-        const email=prompt('Correo electrónico');if(!email)return;
-        const password=prompt('Contraseña (mínimo 8 caracteres)');if(!password)return;
-        if(cmd==='REGISTRO'){await staycleanAuthSignUp(email,password);alert('Revisá tu correo para confirmar la cuenta. Luego elegí INGRESAR.');return;}
-        await staycleanAuthSignIn(email,password);await this.restoreCustomerSession();
-        if(!this.customerProfile)this.openProfileModal();else alert('Sesión iniciada. Tus datos ya están disponibles.');
+      if (cmd === 'REGISTRO' || cmd === 'INGRESAR') {
+        this.openCredentialsDialog(cmd === 'REGISTRO');
         return;
       }
       alert('Opción no reconocida');
     }catch(e){alert('Cuenta StayClean: '+e.message);}
+  }
+
+  openCredentialsDialog(isRegistration) {
+    const existing = document.getElementById('staycleanCredentialsDialog');
+    if (existing) return;
+
+    const dialog = document.createElement('dialog');
+    dialog.id = 'staycleanCredentialsDialog';
+    dialog.className = 'w-[min(90vw,28rem)] rounded-2xl p-6 shadow-xl backdrop:bg-slate-900/60';
+    dialog.setAttribute('aria-labelledby', 'staycleanCredentialsTitle');
+    dialog.innerHTML = `
+      <h2 id="staycleanCredentialsTitle" class="mb-4 text-lg font-bold">${isRegistration ? 'Crear cuenta StayClean' : 'Ingresar a StayClean'}</h2>
+      <form class="grid gap-3">
+        <label class="grid gap-1">Correo electrónico
+          <input name="email" type="email" autocomplete="username" required class="rounded-lg border p-2">
+        </label>
+        <label class="grid gap-1">Contraseña
+          <input name="password" type="password" autocomplete="${isRegistration ? 'new-password' : 'current-password'}" required class="rounded-lg border p-2">
+        </label>
+        <p role="status" class="text-sm text-red-700"></p>
+        <div class="flex justify-end gap-3">
+          <button type="button" class="rounded-lg px-3 py-2">Cancelar</button>
+          <button type="submit" class="rounded-lg bg-slate-900 px-3 py-2 text-white">${isRegistration ? 'Crear cuenta' : 'Ingresar'}</button>
+        </div>
+      </form>
+    `;
+
+    const form = dialog.querySelector('form');
+    const submit = form.querySelector('button[type="submit"]');
+    const cancel = form.querySelector('button[type="button"]');
+    const status = form.querySelector('[role="status"]');
+    const passwordInput = form.elements.namedItem('password');
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    dialog.addEventListener('cancel', event => {
+      if (submit.disabled) event.preventDefault();
+    });
+    cancel.addEventListener('click', () => dialog.close());
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (submit.disabled) return;
+      const email = form.elements.namedItem('email').value.trim();
+      const password = passwordInput.value;
+      submit.disabled = true;
+      cancel.disabled = true;
+      status.textContent = '';
+      try {
+        if (isRegistration) {
+          await staycleanAuthSignUp(email, password);
+          dialog.close();
+          alert('Revisá tu correo para confirmar la cuenta. Luego elegí INGRESAR.');
+          return;
+        }
+        await staycleanAuthSignIn(email, password);
+        await this.restoreCustomerSession();
+        dialog.close();
+        if (!this.customerProfile) this.openProfileModal();
+        else alert('Sesión iniciada. Tus datos ya están disponibles.');
+      } catch (error) {
+        passwordInput.value = '';
+        status.textContent = error.message;
+        passwordInput.focus();
+      } finally {
+        submit.disabled = false;
+        cancel.disabled = false;
+      }
+    });
+    document.body.append(dialog);
+    dialog.showModal();
   }
 
   async loadProducts() {
