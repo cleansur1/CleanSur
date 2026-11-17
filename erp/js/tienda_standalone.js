@@ -2,7 +2,7 @@
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
 import { db } from './db.js';
 import { Formatter } from './models.js';
-import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder } from './supabase_public.js';
+import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, staycleanCreateMpCheckout, staycleanMpCheckoutStatus } from './supabase_public.js';
 
 class TiendaStandaloneApp {
   constructor() {
@@ -22,7 +22,7 @@ class TiendaStandaloneApp {
 
   init() {
     this.loadProducts();
-    this.restoreCustomerSession();
+    this.restoreCustomerSession().then(() => this.handleMpReturn());
     this.setupEventListeners();
     this.updateProfileUI();
     this.updateCartBadge();
@@ -788,6 +788,7 @@ class TiendaStandaloneApp {
             <option value="Efectivo contra entrega">Efectivo contra entrega en Caviahue</option>
             <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
             <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
+            <option value="Mercado Pago">Mercado Pago (pago online de prueba)</option>
           </select>
         </div>
 
@@ -814,6 +815,38 @@ class TiendaStandaloneApp {
     if (modal) modal.classList.add('hidden');
   }
 
+  async handleMpReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('mp');
+    const requestId = params.get('request_id');
+    if (!result || !requestId) return;
+    try {
+      const status = await staycleanMpCheckoutStatus(requestId);
+      if (status.status === 'approved') {
+        this.cart = [];
+        this.saveCart();
+        this.pendingRequestId = null;
+        sessionStorage.removeItem('stayclean_pending_order_id');
+        sessionStorage.removeItem('stayclean_pending_mp_order_id');
+        await this.loadProducts();
+        alert('¡Pago aprobado! Pedido ' + status.order_number + ' registrado correctamente en StayClean.');
+      } else if (status.status === 'pending') {
+        alert('El pago todavía está pendiente de confirmación. No vuelvas a pagar; podés consultar el estado desde tu cuenta.');
+      } else {
+        sessionStorage.removeItem('stayclean_pending_mp_order_id');
+        alert('El pago no figura aprobado. Tu carrito se conserva para que puedas volver a intentarlo.');
+      }
+    } catch (error) {
+      console.error('No se pudo consultar el retorno de Mercado Pago', error);
+      alert('Volviste de Mercado Pago, pero todavía no pudimos verificar el estado. No vuelvas a pagar; consultá tus pedidos en tu cuenta.');
+    } finally {
+      params.delete('mp');
+      params.delete('request_id');
+      const query = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash);
+    }
+  }
+
   async submitOrderToWhatsApp() {
     if (this.sendingOrder) return;
     const prof = this.customerProfile;
@@ -823,6 +856,18 @@ class TiendaStandaloneApp {
     sessionStorage.setItem('stayclean_pending_order_id', requestId);
     const city = /copahue/i.test(prof.zone || '') ? 'Copahue' : 'Caviahue';
     try {
+      const paymentMethod = document.getElementById('checkoutPaymentMethod')?.value || 'Efectivo contra entrega';
+      if (paymentMethod === 'Mercado Pago') {
+        const mpRequestId = sessionStorage.getItem('stayclean_pending_mp_order_id') || crypto.randomUUID();
+        sessionStorage.setItem('stayclean_pending_mp_order_id', mpRequestId);
+        const checkout = await staycleanCreateMpCheckout(
+          mpRequestId,
+          this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+        );
+        if (!checkout.checkout_url || !/^https:\/\//.test(checkout.checkout_url)) throw new Error('Mercado Pago no devolvió una URL válida');
+        window.location.assign(checkout.checkout_url);
+        return;
+      }
       const savedOrder = await staycleanAuthenticatedOrder({
         request_id: requestId,
         customer_name: prof.name,
