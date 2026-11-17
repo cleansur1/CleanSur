@@ -36,7 +36,7 @@ export const ComprasView = {
         <div class="flex flex-wrap items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
           <button onclick="window.app.navigate('compras', { action: 'list' })" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition ${activeTab === 'list' ? 'bg-[#0E3A6B] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
             <i data-lucide="file-Spreadsheet" class="w-4 h-4"></i>
-            Facturas Cargadas (${purchasesCount})
+            Ver compras
           </button>
           <button onclick="window.app.navigate('compras', { action: 'ocr' })" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition ${activeTab === 'ocr' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-700 hover:bg-emerald-50'}">
             <i data-lucide="camera" class="w-4 h-4"></i>
