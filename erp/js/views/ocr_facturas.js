@@ -202,7 +202,7 @@ export const OcrFacturasView = {
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5">
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
             <!-- Zona de Subida de Archivos (soporta 1 o varias fotos / PDF) -->
-            <div class="lg:col-span-5">
+            <div class="lg:col-span-12">
               <div id="ocr-dropzone" class="border-2 border-dashed border-blue-400 bg-blue-50/50 hover:bg-blue-100/60 transition rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer">
                 <input type="file" id="ocr-file-input" accept="image/*,.pdf" multiple class="hidden">
                 <div class="flex items-center gap-3">
@@ -220,36 +220,6 @@ export const OcrFacturasView = {
               </div>
             </div>
 
-            <!-- Botones de Lectura Directa de los Comprobantes Recibidos Hoy -->
-            <div class="lg:col-span-7 space-y-2">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                  <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-600"></i>
-                  Tus Facturas de Hoy (Clic para ver resultado de lectura o cargar las 3 juntas):
-                </span>
-                <button id="btn-batch-load-all" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-extrabold shadow-sm transition flex items-center gap-1.5">
-                  <i data-lucide="zap" class="w-3.5 h-3.5"></i>
-                  Cargar las 3 Facturas Completas en 1 Clic
-                </button>
-              </div>
-              <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                <button data-preset="EFA_P1" class="btn-preset-invoice px-2.5 py-2 rounded-xl border text-left transition ${this.extractedInvoice?.key === 'EFA_P1' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 hover:bg-blue-50 text-slate-700 border-slate-200'}">
-                  <span class="block text-[10px] font-black uppercase truncate">1. Demo A (Hoja 1/2)</span>\n                  <span class="block text-[10px] opacity-80 truncate">4 art · $80.000,00</span>
-                </button>
-                <button data-preset="EFA_P2" class="btn-preset-invoice px-2.5 py-2 rounded-xl border text-left transition ${this.extractedInvoice?.key === 'EFA_P2' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 hover:bg-blue-50 text-slate-700 border-slate-200'}">
-                  <span class="block text-[10px] font-black uppercase truncate">2. Demo A (Hoja 2/2)</span>\n                  <span class="block text-[10px] opacity-80 truncate">2 art · $20.000,00</span>
-                </button>
-                <button data-preset="EFA_FULL" class="btn-preset-invoice px-2.5 py-2 rounded-xl border text-left transition ${this.extractedInvoice?.key === 'EFA_FULL' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 border-indigo-200'}">
-                  <span class="block text-[10px] font-black uppercase truncate">Demo A (Completa 1+2)</span>\n                  <span class="block text-[10px] opacity-80 truncate">6 art · $100.000,00</span>
-                </button>
-                <button data-preset="EL_TRIO" class="btn-preset-invoice px-2.5 py-2 rounded-xl border text-left transition ${this.extractedInvoice?.key === 'EL_TRIO' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 hover:bg-blue-50 text-slate-700 border-slate-200'}">
-                  <span class="block text-[10px] font-black uppercase truncate">3. Demo B (c/ Desc 10%)</span>\n                  <span class="block text-[10px] opacity-80 truncate">2 art · $108.900,00</span>
-                </button>
-                <button data-preset="SYS_7572" class="btn-preset-invoice px-2.5 py-2 rounded-xl border text-left transition ${this.extractedInvoice?.key === 'SYS_7572' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 hover:bg-blue-50 text-slate-700 border-slate-200'}">
-                  <span class="block text-[10px] font-black uppercase truncate">4. Demo C (Pedido Químicos)</span>\n                  <span class="block text-[10px] opacity-80 truncate">4 art · $155.000,00</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
