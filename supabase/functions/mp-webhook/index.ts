@@ -87,6 +87,7 @@ Deno.serve(async (req: Request) => {
     if (intentError) return response(500, "intent lookup failed");
     if (!intent || intent.mp_order_id !== mpOrder.id) return response(200, "ignored: order not linked");
     if (intent.status === "approved") return response(200, "already processed");
+    if (intent.status === "fulfillment_review") return response(200, "already flagged for manual fulfillment review");
 
     const payment = mpOrder.transactions?.payments?.[0];
     const paidAmount = Number(mpOrder.total_paid_amount ?? payment?.paid_amount ?? 0);
