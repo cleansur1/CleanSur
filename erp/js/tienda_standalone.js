@@ -73,7 +73,11 @@ class TiendaStandaloneApp {
   }
   async openAccountDialog(){
     const active=!!(await staycleanAuthToken());
-    const action=prompt(active?'Cuenta StayClean: escribí PEDIDOS para ver tus compras, SALIR para cerrar sesión o PERFIL para editar tus datos.':'Cuenta StayClean: escribí REGISTRO, INGRESAR o RECUPERAR:');
+    if (!active) {
+      this.openAccountActionDialog();
+      return;
+    }
+    const action=prompt('Cuenta StayClean: escribí PEDIDOS para ver tus compras, SALIR para cerrar sesión o PERFIL para editar tus datos.');
     if(!action)return;
     const cmd=action.trim().toUpperCase();
     try{
@@ -87,6 +91,72 @@ class TiendaStandaloneApp {
       }
       alert('Opción no reconocida');
     }catch(e){alert('Cuenta StayClean: '+e.message);}
+  }
+
+  openAccountActionDialog() {
+    if (document.getElementById('staycleanAccountActionDialog')) return;
+    const dialog = document.createElement('dialog');
+    dialog.id = 'staycleanAccountActionDialog';
+    dialog.className = 'w-[min(90vw,28rem)] rounded-2xl p-6 shadow-xl backdrop:bg-slate-900/60';
+    dialog.setAttribute('aria-label', 'Acceso a cuenta StayClean');
+    dialog.innerHTML = `
+      <h2 class="text-lg font-bold mb-4">Tu cuenta StayClean</h2>
+      <p class="text-sm text-slate-600 mb-4">Ingresá o creá una cuenta para continuar con tu pedido.</p>
+      <div class="grid gap-3">
+        <button type="button" data-action="login" class="rounded-lg bg-slate-900 px-3 py-2 text-white">Ingresar con mi cuenta</button>
+        <button type="button" data-action="register" class="rounded-lg border px-3 py-2">Crear cuenta</button>
+        <button type="button" data-action="recover" class="rounded-lg border px-3 py-2">Recuperar contraseña</button>
+        <button type="button" data-action="cancel" class="rounded-lg px-3 py-2">Cancelar</button>
+      </div>
+    `;
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    dialog.querySelector('[data-action="cancel"]').addEventListener('click', () => dialog.close());
+    dialog.querySelector('[data-action="login"]').addEventListener('click', () => { dialog.close(); this.openCredentialsDialog(false); });
+    dialog.querySelector('[data-action="register"]').addEventListener('click', () => { dialog.close(); this.openCredentialsDialog(true); });
+    dialog.querySelector('[data-action="recover"]').addEventListener('click', () => {
+      dialog.close();
+      this.openPasswordRecoveryDialog();
+    });
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+
+  openPasswordRecoveryDialog() {
+    if (document.getElementById('staycleanRecoveryDialog')) return;
+    const dialog = document.createElement('dialog');
+    dialog.id = 'staycleanRecoveryDialog';
+    dialog.className = 'w-[min(90vw,28rem)] rounded-2xl p-6 shadow-xl backdrop:bg-slate-900/60';
+    dialog.innerHTML = `
+      <h2 class="text-lg font-bold mb-4">Recuperar contraseña</h2>
+      <form class="grid gap-3">
+        <label class="grid gap-1">Correo electrónico
+          <input name="email" type="email" autocomplete="email" required class="rounded-lg border p-2">
+        </label>
+        <p role="status" class="text-sm text-red-700"></p>
+        <button type="submit" class="rounded-lg bg-slate-900 px-3 py-2 text-white">Enviar recuperación</button>
+        <button type="button" class="rounded-lg px-3 py-2">Cancelar</button>
+      </form>
+    `;
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    const form = dialog.querySelector('form');
+    const cancel = form.querySelector('button[type="button"]');
+    const submit = form.querySelector('button[type="submit"]');
+    cancel.addEventListener('click', () => dialog.close());
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      submit.disabled = true;
+      try {
+        await staycleanAuthReset(form.elements.namedItem('email').value.trim());
+        dialog.close();
+        alert('Si existe una cuenta, recibirás instrucciones por correo.');
+      } catch(error) {
+        form.querySelector('[role="status"]').textContent = error.message;
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    document.body.append(dialog);
+    dialog.showModal();
   }
 
   openCredentialsDialog(isRegistration) {
