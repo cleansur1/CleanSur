@@ -821,7 +821,15 @@ class TiendaStandaloneApp {
     const requestId = params.get('request_id');
     if (!result || !requestId) return;
     try {
-      const status = await staycleanMpCheckoutStatus(requestId);
+      // The buyer may return before Mercado Pago delivers the signed webhook.
+      // Never treat the return URL itself as proof of payment.
+      let status = await staycleanMpCheckoutStatus(requestId);
+      if (result === 'success' && status.status === 'pending') {
+        for (let attempt = 0; attempt < 6 && status.status === 'pending'; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          status = await staycleanMpCheckoutStatus(requestId);
+        }
+      }
       if (status.status === 'approved') {
         this.cart = [];
         this.saveCart();
