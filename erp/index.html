@@ -406,7 +406,7 @@
   <script>
     (async function() {
       try {
-        const swCleared = localStorage.getItem('stayclean_sw_cleared_v6');
+        const swCleared = localStorage.getItem('cleansur_sw_cleared_v7');
         if (!swCleared) {
           if ('serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
@@ -416,18 +416,18 @@
             const keys = await caches.keys();
             for (const k of keys) await caches.delete(k);
           }
-          localStorage.setItem('stayclean_sw_cleared_v6', 'true');
+          localStorage.setItem('cleansur_sw_cleared_v7', 'true');
           window.location.reload();
         }
       } catch (e) {}
     })();
   </script>
 
-  <div id="stayclean-boot-status" role="status" style="position:fixed;inset:0;z-index:99998;background:#f1f5f9;display:grid;place-items:center;font:16px system-ui;color:#12385a"><div style="background:white;padding:30px;border-radius:14px;box-shadow:0 8px 30px #0002;text-align:center"><strong>CleanSur · ERP de prueba</strong><p id="stayclean-boot-message">Iniciando aplicación…</p><a href="../index.html" style="color:#0b67a3">Abrir panel de inventario alternativo</a></div></div>
+  <div id="stayclean-boot-status" role="status" style="position:fixed;inset:0;z-index:99998;background:#f1f5f9;display:grid;place-items:center;font:16px system-ui;color:#12385a"><div style="background:white;padding:30px;border-radius:14px;box-shadow:0 8px 30px #0002;text-align:center"><strong>CleanSur · ERP</strong><p id="stayclean-boot-message">Iniciando aplicación…</p><a href="../index.html" style="color:#0b67a3">Abrir panel de inventario alternativo</a></div></div>
   <script>
     window.addEventListener('error', e => {
       const node=document.getElementById('stayclean-boot-message');
-      if(node) node.textContent='Error de carga: '+(e.message||'archivo no disponible')+'. Recargá con Ctrl+F5.';
+      if(node) node.textContent='Error de carga: '+(e.message||'archivo no disponible')+' ('+(e.filename||'módulo desconocido').split('/').pop()+':'+(e.lineno||'?')+').';
     });
     window.addEventListener('unhandledrejection', e => {
       const node=document.getElementById('stayclean-boot-message');
@@ -435,6 +435,6 @@
     });
   </script>
   <!-- Script Principal de la Aplicación -->
-  <script type="module" src="js/app.js?v=12.0"></script>
+  <script type="module" src="js/app.js?v=13.0"></script>
 </body>
 </html>
