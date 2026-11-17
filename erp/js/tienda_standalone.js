@@ -2,7 +2,7 @@
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
 import { db } from './db.js';
 import { Formatter } from './models.js';
-import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder } from './supabase_public.js';
+import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js';
 
 class TiendaStandaloneApp {
   constructor() {
@@ -27,6 +27,7 @@ class TiendaStandaloneApp {
     this.updateProfileUI();
     this.updateCartBadge();
     this.applyFilters();
+    this.checkPaymentReturn();
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -675,6 +676,51 @@ class TiendaStandaloneApp {
     }
   }
 
+  async checkPaymentReturn() {
+    const params=new URLSearchParams(location.search);
+    const state=params.get('mp'), requestId=params.get('request_id');
+    if(!state || !requestId) return;
+    history.replaceState(null,'',location.pathname);
+    const token=await staycleanAuthToken();
+    if(!token){alert('Iniciá sesión para consultar el resultado de tu pago. No vuelvas a pagar hasta verificarlo.');return;}
+    try {
+      const res=await fetch(STAYCLEAN_SUPABASE_URL+'/functions/v1/get-mp-checkout-status',{
+        method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({request_id:requestId})
+      });
+      const data=await res.json();
+      if(!res.ok) throw Error(data.error||'No se pudo consultar el pago');
+      if(data.status==='approved'||data.status==='paid'||data.status==='completed'){
+        this.cart=[];this.saveCart();this.pendingRequestId=null;sessionStorage.removeItem('stayclean_pending_order_id');
+        alert('Pago aprobado. Pedido '+(data.order_number||'registrado')+'. Podés verlo desde Mi cuenta → PEDIDOS.');
+      } else {
+        alert('Estado del pago: '+(data.mp_status||data.status||'pendiente')+'. No repitas el pago hasta verificar su estado.');
+      }
+    } catch(e){alert('No pudimos verificar el pago: '+e.message+'. Consultá el pedido antes de intentar pagar nuevamente.');}
+  }
+
+  async startMercadoPagoCheckout() {
+    if(this.sendingOrder)return;
+    if(!this.cart.length){alert('Tu carrito está vacío.');return;}
+    const token=await staycleanAuthToken();
+    if(!token){alert('Iniciá sesión antes de pagar.');await this.openAccountDialog();return;}
+    if(!this.customerProfile?.name||!this.customerProfile?.phone||!this.customerProfile?.address){this.openProfileModal();return;}
+    this.sendingOrder=true;
+    const requestId=this.pendingRequestId||(this.pendingRequestId=crypto.randomUUID());
+    sessionStorage.setItem('stayclean_pending_order_id',requestId);
+    try {
+      const response=await fetch(STAYCLEAN_SUPABASE_URL+'/functions/v1/create-mp-checkout',{
+        method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({request_id:requestId,items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity}))})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw Error(data.error||data.detail||'Mercado Pago no pudo iniciar el pago');
+      if(!/^https:\/\//i.test(data.checkout_url||''))throw Error('El servidor no devolvió un enlace de pago seguro');
+      location.assign(data.checkout_url);
+    }catch(e){alert('No se inició el pago ni se confirmó el pedido: '+e.message);}
+    finally{this.sendingOrder=false;}
+  }
+
   async proceedToCheckout() {
     if(!await staycleanAuthToken()){this.closeCart();await this.openAccountDialog();return;}
     if (this.cart.length === 0) {
@@ -787,12 +833,14 @@ class TiendaStandaloneApp {
           <select id="checkoutPaymentMethod" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
             <option value="Efectivo contra entrega">Efectivo contra entrega en Caviahue</option>
             <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
+            <option value="Mercado Pago">Mercado Pago (pago online)</option>
             <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
           </select>
         </div>
 
         <!-- Botón de Envío por WhatsApp -->
         <div class="pt-3 border-t border-slate-100 space-y-2">
+          <button onclick="window.tiendaApp.startMercadoPagoCheckout()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-[#0E3A6B] hover:bg-[#1E88E5] text-white shadow-md">Pagar online con Mercado Pago</button>
           <button onclick="window.tiendaApp.submitOrderToWhatsApp()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99]">
             <i data-lucide="send" class="w-4 h-4"></i>
             <span>Confirmar y Enviar Pedido por WhatsApp</span>
