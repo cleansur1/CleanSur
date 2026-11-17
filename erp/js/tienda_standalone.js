@@ -784,7 +784,7 @@ class TiendaStandaloneApp {
         <!-- Método de Pago Preferido -->
         <div class="space-y-1.5">
           <label class="block font-bold text-slate-700">Forma de Pago:</label>
-          <select id="checkoutPaymentMethod" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
+          <select id="checkoutPaymentMethod" onchange="document.getElementById(\'checkoutSubmitLabel\').textContent = this.value === \'Mercado Pago\' ? \'Continuar a Mercado Pago\' : \'Confirmar y Enviar Pedido por WhatsApp\'" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
             <option value="Efectivo contra entrega">Efectivo contra entrega en Caviahue</option>
             <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
             <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
@@ -796,7 +796,7 @@ class TiendaStandaloneApp {
         <div class="pt-3 border-t border-slate-100 space-y-2">
           <button onclick="window.tiendaApp.submitOrderToWhatsApp()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99]">
             <i data-lucide="send" class="w-4 h-4"></i>
-            <span>Confirmar y Enviar Pedido por WhatsApp</span>
+            <span id="checkoutSubmitLabel">Confirmar y Enviar Pedido por WhatsApp</span>
           </button>
           <p class="text-[10px] text-slate-400 text-center">
             Se abrirá WhatsApp con el pedido redactado para que lo envíes con un solo clic.
