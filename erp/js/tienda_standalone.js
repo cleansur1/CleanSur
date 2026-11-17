@@ -42,6 +42,9 @@ class TiendaStandaloneApp {
 
   saveCart() {
     localStorage.setItem('caviahue_tienda_cart', JSON.stringify(this.cart));
+    // El identificador idempotente pertenece a un carrito exacto: si cambia, crear otro intento.
+    this.pendingRequestId = null;
+    sessionStorage.removeItem('stayclean_pending_order_id');
     this.updateCartBadge();
   }
 
