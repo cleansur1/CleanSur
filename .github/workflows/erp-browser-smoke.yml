@@ -35,7 +35,7 @@ jobs:
           const storeErrors=[];
           store.on('pageerror',e=>{storeErrors.push(e.message);console.log('STORE PAGE ERROR:',e.stack||e.message)});
           await store.goto('http://127.0.0.1:8765/tienda/',{waitUntil:'domcontentloaded'});
-          await store.locator('#btnProceedCheckout').waitFor({timeout:15000});
+          await store.locator('#btnProceedCheckout').waitFor({state:'attached',timeout:15000});
           if(storeErrors.length) throw new Error('Store JavaScript errors: '+storeErrors.join(' | '));
           console.log('PASS: CleanSur store renders without JavaScript exceptions');
           await browser.close();
