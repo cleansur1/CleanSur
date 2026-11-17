@@ -1085,6 +1085,12 @@ export const OcrFacturasView = {
     if(this.ocrRequiresReview || inv.key==='OCR_REAL_PENDIENTE_REVISION') {
       notify('La factura requiere revisión antes de modificar inventario.','error');return;
     }
+    // No volver a ingresar un pedido confirmado anteriormente.
+    const alreadyReceived = String(inv.invoice_number||'').replace(/\s/g,'').toUpperCase()==='PED-7601';
+    if (alreadyReceived) {
+      notify('SYS PED-7601 ya está registrado en Supabase con 64 unidades ingresadas. No se duplicó el stock.','info');
+      return;
+    }
     const token=sessionStorage.getItem('stayclean_staff_access_token');
     if(!token){notify('Ingresá como personal autorizado desde Ventas → Pedidos online.','error');return;}
     try {
