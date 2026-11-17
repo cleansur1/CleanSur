@@ -699,6 +699,13 @@ class TiendaStandaloneApp {
     } catch(e){alert('No pudimos verificar el pago: '+e.message+'. Consultá el pedido antes de intentar pagar nuevamente.');}
   }
 
+  async confirmSelectedPayment() {
+    const mode=document.getElementById('checkoutPaymentMethod')?.value;
+    if(mode==='Mercado Pago')return this.startMercadoPagoCheckout();
+    if(!mode){alert('Seleccioná una forma de pago.');return;}
+    return this.submitOrderToWhatsApp();
+  }
+
   async startMercadoPagoCheckout() {
     if(this.sendingOrder)return;
     if(!this.cart.length){alert('Tu carrito está vacío.');return;}
@@ -840,14 +847,10 @@ class TiendaStandaloneApp {
 
         <!-- Botón de Envío por WhatsApp -->
         <div class="pt-3 border-t border-slate-100 space-y-2">
-          <button onclick="window.tiendaApp.startMercadoPagoCheckout()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-[#0E3A6B] hover:bg-[#1E88E5] text-white shadow-md">Pagar online con Mercado Pago</button>
-          <button onclick="window.tiendaApp.submitOrderToWhatsApp()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99]">
-            <i data-lucide="send" class="w-4 h-4"></i>
-            <span>Confirmar y Enviar Pedido por WhatsApp</span>
+          <button onclick="window.tiendaApp.confirmSelectedPayment()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-[#0E3A6B] hover:bg-[#1E88E5] text-white shadow-md flex items-center justify-center gap-2">
+            <i data-lucide="check-circle" class="w-4 h-4"></i><span>Confirmar pedido con la forma de pago elegida</span>
           </button>
-          <p class="text-[10px] text-slate-400 text-center">
-            Se abrirá WhatsApp con el pedido redactado para que lo envíes con un solo clic.
-          </p>
+          <p class="text-[10px] text-slate-500 text-center">Con Mercado Pago irás al pago online. Con otros medios se registrará el pedido y se abrirá WhatsApp para coordinar.</p>
         </div>
 
       </div>
