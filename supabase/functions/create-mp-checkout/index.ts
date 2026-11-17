@@ -21,6 +21,24 @@ Deno.serve(async (req: Request) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const mpToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+    // Explicitly configured return origin. Never default to the production storefront.
+    const returnBase = Deno.env.get("STAYCLEAN_MP_RETURN_URL");
+    if (!returnBase) return reply(503, { error: "Falta configurar el destino de retorno del checkout" });
+    let returnUrl: URL;
+    try {
+      returnUrl = new URL(returnBase);
+      if (returnUrl.protocol !== "https:" || returnUrl.username || returnUrl.password || returnUrl.search || returnUrl.hash) {
+        return reply(503, { error: "Destino de retorno inválido" });
+      }
+    } catch {
+      return reply(503, { error: "Destino de retorno inválido" });
+    }
+    const mpReturn = (result: string, id: string) => {
+      const url = new URL(returnUrl.toString());
+      url.searchParams.set("mp", result);
+      url.searchParams.set("request_id", id);
+      return url.toString();
+    };
     if (!mpToken) return reply(500, { error: "Falta configurar Mercado Pago en el servidor" });
 
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -76,9 +94,9 @@ Deno.serve(async (req: Request) => {
         external_reference: stored.id,
         expiration_time: "PT30M",
         config: { online: {
-          success_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=success&request_id=${encodeURIComponent(requestId)}`,
-          failure_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=failure&request_id=${encodeURIComponent(requestId)}`,
-          pending_url: `https://fedeeumann.github.io/StayClean-Test/tienda/?mp=pending&request_id=${encodeURIComponent(requestId)}`,
+          success_url: mpReturn("success", requestId),
+          failure_url: mpReturn("failure", requestId),
+          pending_url: mpReturn("pending", requestId),
           auto_return: "all"
         } },
         items: (stored.items_snapshot ?? []).map((line: any) => ({
