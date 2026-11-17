@@ -828,6 +828,7 @@ class TiendaStandaloneApp {
         this.pendingRequestId = null;
         sessionStorage.removeItem('stayclean_pending_order_id');
         sessionStorage.removeItem('stayclean_pending_mp_order_id');
+        sessionStorage.removeItem('stayclean_pending_mp_cart');
         await this.loadProducts();
         alert('¡Pago aprobado! Pedido ' + status.order_number + ' registrado correctamente en StayClean.');
       } else if (status.status === 'pending' || status.status === 'fulfillment_review') {
@@ -838,6 +839,7 @@ class TiendaStandaloneApp {
         }
       } else {
         sessionStorage.removeItem('stayclean_pending_mp_order_id');
+        sessionStorage.removeItem('stayclean_pending_mp_cart');
         alert('El pago no figura aprobado. Tu carrito se conserva para que puedas volver a intentarlo.');
       }
     } catch (error) {
@@ -862,7 +864,19 @@ class TiendaStandaloneApp {
     try {
       const paymentMethod = document.getElementById('checkoutPaymentMethod')?.value || 'Efectivo contra entrega';
       if (paymentMethod === 'Mercado Pago') {
+        // Never reuse a payment intent for a changed cart: the server intentionally
+        // reuses the original price/quantity snapshot for an existing request_id.
+        const cartFingerprint = JSON.stringify(
+          this.cart.map(item => [String(item.id), Number(item.quantity)])
+            .sort((a, b) => a[0].localeCompare(b[0]))
+        );
+        const previousFingerprint = sessionStorage.getItem('stayclean_pending_mp_cart');
+        if (previousFingerprint !== cartFingerprint) {
+          sessionStorage.removeItem('stayclean_pending_mp_order_id');
+        sessionStorage.removeItem('stayclean_pending_mp_cart');
+        }
         const mpRequestId = sessionStorage.getItem('stayclean_pending_mp_order_id') || crypto.randomUUID();
+        sessionStorage.setItem('stayclean_pending_mp_cart', cartFingerprint);
         sessionStorage.setItem('stayclean_pending_mp_order_id', mpRequestId);
         const checkout = await staycleanCreateMpCheckout(
           mpRequestId,
