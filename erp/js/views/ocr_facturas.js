@@ -759,7 +759,7 @@ export const OcrFacturasView = {
 
   parseSysOrderText(raw) {
     const text = String(raw || '').replace(/\u00a0/g, ' ');
-    if (!/SYS PRODUCTOS DE LIMPIEZA|SATURNINO FRANCO|#\s*7572/i.test(text)) return null;
+    if (!/SYS PRODUCTOS DE LIMPIEZA|SATURNINO FRANCO|SYS LABORATORIO/i.test(text)) return null;
     const money = v => Number(String(v).replace(/\./g,'').replace(',','.'));
     const rows = [];
     const re = /\b(200\d{4})\s+(CAJA\s+.{4,110}?)\s+(\d{1,3})\s+\$?\s*([\d.]+,\d{2})\s+\$?\s*([\d.]+,\d{2})(?=\s|$)/gi;
@@ -786,7 +786,7 @@ export const OcrFacturasView = {
         row.inventory_unit = 'bidón 5 L';
         row.pricing_mode = 'PER_BOX';
       }
-      if (row.code === '2000085') {
+      if (row.code === '2000085' && /\b7572\b/.test(text)) {
         row.units_per_box = 4;
         row.inventory_unit = 'bidón 5 L';
         row.pricing_mode = 'PER_BOX';
@@ -797,7 +797,7 @@ export const OcrFacturasView = {
     // Mantener el segundo como faltante reclamado, fuera de la mercadería recibida.
     let lampazoSeen = 0;
     for (const row of rows) {
-      if (row.code === '2000085') {
+      if (row.code === '2000085' && /\b7572\b/.test(text)) {
         lampazoSeen++;
         if (lampazoSeen > 1) {
           row.pending_supplier_claim = true;
@@ -832,7 +832,7 @@ export const OcrFacturasView = {
     }
     const codes = rows.map(r=>r.code);
     const duplicates=[...new Set(codes.filter((code,i)=>codes.indexOf(code)!==i))];
-    return {rows,consolidated,duplicates,orderNumber:text.match(/#\s*(7572)/)?.[1]||'7572'};
+    return {rows,consolidated,duplicates,orderNumber:text.match(/(?:PEDIDO\s*(?:N[°º.]?\s*)?|#\s*)(\d{4,8})/i)?.[1]||''};
   },
 
   async handleFilesSelect(files) {
