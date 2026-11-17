@@ -789,6 +789,15 @@ export const OcrFacturasView = {
           discount_pct:0,pricing_mode:'PER_BOX'});
       }
     }
+    // Normalizar conversiones incluso si la expresión genérica reconoció la línea.
+    for (const row of rows) {
+      const pack=String(row.description||'').match(/(\d+)\s+UNID\s+X\s+(\d+)\s*L(?:T|TS)?\b/i);
+      if (pack) {
+        row.units_per_box=Number(pack[1]);
+        row.inventory_unit=Number(pack[2])===1?'botella':'bidón';
+        row.pricing_mode='PER_BOX';
+      }
+    }
     // Reglas verificadas contra el pedido físico y la conciliación de Antigravity.
     for (const row of rows) {
       if (row.code === '2000156') {
@@ -930,7 +939,7 @@ export const OcrFacturasView = {
       this.ocrPreviewLines = lines;
       // Sólo habilitar confirmación cuando la lectura de SYS es íntegra y conciliada.
       const parsedTotal=(sysParsed?.rows||[]).reduce((sum,row)=>sum+Number(row.line_total||0),0);
-      const validSys = !!sysParsed && !!sysParsed.orderNumber && sysParsed.rows.length>0 &&
+      const validSys = !!sysParsed && !!sysParsed.orderNumber && sysParsed.rows.length===4 &&
         sysParsed.rows.every(row=>row.code && row.description && Number(row.quantity)>0 && Number(row.units_per_box)>0) &&
         !sysParsed.duplicates.length && Number.isFinite(total) && total>0 && Math.abs(parsedTotal-total)<0.02;
       this.ocrRequiresReview = !validSys;
