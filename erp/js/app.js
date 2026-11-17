@@ -5,7 +5,7 @@ import { readCentral, readCentralDashboard, centralTables } from './supabase_erp
 import { DashboardView } from './views/dashboard.js?v=7.0';
 import { VentasView } from './views/ventas.js?v=8.0';
 import { ComprasView } from './views/compras.js?v=12.1';
-import { ProductosView } from './views/productos.js?v=6.0';
+import { ProductosView } from './views/productos.js?v=7.0';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
 import { ClientesView } from './views/clientes.js?v=6.0';
@@ -435,9 +435,10 @@ async function bootCentralReadOnly() {
             control.closest('#ocr-dropzone, #ocr-file-input, #btn-toggle-image, #btn-add-ocr-row') ||
             control.classList.contains('btn-remove-ocr-row')
           );
-          if (safeNavigation || stockControl || ocrReadControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          const priceControl = app.currentRoute === 'productos' && handler.includes('window.productosModule.changeCentralPrice(');
+          if (safeNavigation || priceControl || stockControl || ocrReadControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
-          alert('Vista de prueba: las operaciones están deshabilitadas.');
+          alert('Esta operación todavía no está habilitada para guardar en Supabase.');
         }
       }, true);
       document.addEventListener('submit', e => { if (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
