@@ -2,7 +2,7 @@
 import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
-import { DashboardView } from './views/dashboard.js?v=6.0';
+import { DashboardView } from './views/dashboard.js?v=7.0';
 import { VentasView } from './views/ventas.js?v=8.0';
 import { ComprasView } from './views/compras.js?v=12.0';
 import { ProductosView } from './views/productos.js?v=6.0';
@@ -71,7 +71,7 @@ class App {
     this.setupPWA();
     this.updateUserHeader();
     this.applyRolePermissions();
-    this.navigate(this.centralReadOnly ? 'productos' : 'dashboard');
+    this.navigate('dashboard');
 
     // Manejar atajo de teclado Ctrl+K
     window.addEventListener('keydown', (e) => {
