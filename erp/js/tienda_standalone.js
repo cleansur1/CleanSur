@@ -727,7 +727,7 @@ class TiendaStandaloneApp {
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw Error(data.error||data.detail||'Mercado Pago no pudo iniciar el pago');
       const checkout=new URL(data.checkout_url||'');
-      if(checkout.protocol!=='https:' || !/(^|\\.)mercadopago\\.com(\\.ar)?$/.test(checkout.hostname))throw Error('Mercado Pago no devolvió un enlace de pago válido');
+      if(checkout.protocol!=='https:' || !/(^|\.)mercadopago\.com(\.ar)?$/.test(checkout.hostname))throw Error('Mercado Pago no devolvió un enlace de pago válido');
       location.assign(data.checkout_url);
     }catch(e){alert('No se inició el pago ni se confirmó el pedido: '+e.message);}
     finally{this.sendingOrder=false;}
