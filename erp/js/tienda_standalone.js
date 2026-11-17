@@ -53,6 +53,24 @@ class TiendaStandaloneApp {
     const p=await staycleanCustomerProfile({name:profile.name,phone:profile.phone,address:profile.address,city:/copahue/i.test(profile.zone||'')?'Copahue':'Caviahue'});
     this.customerProfile={...profile,email:p.email};this.updateProfileUI();
   }
+
+  async showOrderReceipts(selectNumber=null){
+    const orders=await staycleanCustomerOrders();
+    if(!orders.length){alert('Todavía no tenés pedidos.');return;}
+    const target=selectNumber?orders.find(o=>o.number===selectNumber):null;
+    const selected=target||orders[Number(prompt('Elegí el número del pedido para ver su comprobante:\\n'+orders.map((o,i)=>(i+1)+'. '+o.number+' · $'+Number(o.total).toLocaleString('es-AR')).join('\\n'))-1)];
+    if(!selected)return;
+    const profile=await staycleanCustomerProfile();
+    const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const money=x=>'$ '+Number(x||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const lines=Array.isArray(selected.items)?selected.items:[];
+    const rows=lines.map(item=>'<tr><td>'+esc(item.product_name)+'</td><td>'+esc(item.quantity)+' '+esc(item.unit_name||'')+'</td><td>'+money(item.unit_price)+'</td><td>'+money(item.subtotal)+'</td></tr>').join('');
+    const html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Comprobante '+esc(selected.number)+'</title><style>body{font-family:Arial,sans-serif;color:#172b46;max-width:850px;margin:36px auto;padding:16px}header{border-bottom:3px solid #0e3a6b;padding-bottom:16px}h1{margin:0}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:12px 8px;text-align:left;border-bottom:1px solid #ddd}th{background:#f2f5f9}.total{text-align:right;font-size:23px;font-weight:bold;margin-top:25px}.note{font-size:12px;color:#555;margin-top:30px}.actions{margin-top:20px}@media print{.actions{display:none}body{margin:0}}</style></head><body><header><h1>StayClean</h1><p>Comprobante de compra · No válido como factura fiscal</p></header><h2>Pedido '+esc(selected.number)+'</h2><p>Fecha: '+esc(new Date(selected.date).toLocaleString('es-AR'))+'<br>Estado: '+esc(selected.status)+'<br>Cliente: '+esc(profile.name)+'<br>Entrega: '+esc(profile.address)+', '+esc(profile.city)+'</p><table><thead><tr><th>Producto</th><th>Cantidad</th><th>Precio unitario</th><th>Subtotal</th></tr></thead><tbody>'+rows+'</tbody></table><p class="total">Total: '+money(selected.total)+'</p><p class="note">Este documento acredita el detalle del pedido. No constituye factura electrónica de ARCA ni comprobante de pago.</p><div class="actions"><button onclick="window.print()">Imprimir / Guardar como PDF</button></div></body></html>';
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
   async openAccountDialog(){
     const active=!!(await staycleanAuthToken());
     const action=prompt(active?'Cuenta StayClean: escribí PEDIDOS para ver tus compras, SALIR para cerrar sesión o PERFIL para editar tus datos.':'Cuenta StayClean: escribí REGISTRO, INGRESAR o RECUPERAR:');
@@ -60,7 +78,7 @@ class TiendaStandaloneApp {
     const cmd=action.trim().toUpperCase();
     try{
       if(cmd==='SALIR'){await staycleanAuthSignOut();this.customerProfile=null;this.updateProfileUI();alert('Sesión cerrada');return;}
-      if(cmd==='PEDIDOS'){const orders=await staycleanCustomerOrders();alert(orders.length?orders.map(o=>o.number+' · '+o.status+' · $'+o.total).join('\\n'):'Todavía no tenés pedidos');return;}
+      if(cmd==='PEDIDOS'){await this.showOrderReceipts();return;}
       if(cmd==='PERFIL'){this.openProfileModal();return;}
       if(cmd==='RECUPERAR'){const email=prompt('Correo de tu cuenta');if(email){await staycleanAuthReset(email);alert('Si existe una cuenta, recibirás instrucciones por correo.')}return;}
       if(cmd==='REGISTRO'||cmd==='INGRESAR'){
@@ -823,7 +841,7 @@ class TiendaStandaloneApp {
       this.closeOrderConfirmation();
       await this.loadProducts();
       window.open(`https://wa.me/${this.companyWhatsApp}?text=${encodeURIComponent(message)}`, '_blank');
-      alert(`Pedido ${savedOrder.order_number} registrado correctamente en StayClean.`);
+      alert(`Pedido ${savedOrder.order_number} registrado correctamente en StayClean. Podés consultar e imprimir tu comprobante desde Mi cuenta → PEDIDOS.`);
     } catch (error) {
       console.error('Error registrando pedido en Supabase', error);
       alert('No se registró el pedido: ' + error.message + '. El carrito permanece intacto.');
