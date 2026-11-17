@@ -415,15 +415,14 @@ async function bootCentralReadOnly() {
       app.centralDashboard = centralDashboard;
       shield.remove();
       app.init();
-      const banner = document.createElement('div');
-      banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9000;background:#fef3c7;color:#78350f;padding:9px 14px;text-align:center;font:600 12px system-ui';
-      banner.textContent = `SUPABASE · ${loadedProducts} productos · ${loadedStock} unidades · ${loadedPurchases} compras · Inventario central visible`;
+      // Acceso central: sin zócalo de diagnóstico. Mantener cierre de sesión accesible.
       const exit = document.createElement('button');
-      exit.textContent = 'Salir';
-      exit.style.cssText = 'margin-left:16px;text-decoration:underline';
+      exit.type = 'button';
+      exit.textContent = 'Cerrar sesión';
+      exit.setAttribute('aria-label', 'Cerrar sesión de CleanSur');
+      exit.style.cssText = 'position:fixed;top:72px;right:16px;z-index:9000;background:white;color:#0e3a6b;border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font:600 12px system-ui;box-shadow:0 2px 8px #0001';
       exit.onclick = async () => { await signOutAdmin(); location.reload(); };
-      banner.append(exit);
-      document.body.append(banner);
+      document.body.append(exit);
       // Bloqueo de controles de escritura: navegación permitida, formularios y acciones no.
       document.addEventListener('click', e => {
         if (e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link')) return;
