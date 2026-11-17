@@ -759,7 +759,7 @@ export const OcrFacturasView = {
 
   parseSysOrderText(raw) {
     const text = String(raw || '').replace(/\u00a0/g, ' ');
-    if (!/SYS PRODUCTOS DE LIMPIEZA|SATURNINO FRANCO|#\s*7572/i.test(text)) return null;
+    if (!/SYS PRODUCTOS DE LIMPIEZA|SATURNINO FRANCO/i.test(text)) return null;
     const money = v => Number(String(v).replace(/\./g,'').replace(',','.'));
     const rows = [];
     const re = /\b(200\d{4})\s+(CAJA\s+.{4,110}?)\s+(\d{1,3})\s+\$?\s*([\d.]+,\d{2})\s+\$?\s*([\d.]+,\d{2})(?=\s|$)/gi;
@@ -786,7 +786,7 @@ export const OcrFacturasView = {
         row.inventory_unit = 'bidón 5 L';
         row.pricing_mode = 'PER_BOX';
       }
-      if (row.code === '2000085') {
+      if (/#\s*7572\b/.test(text) && row.code === '2000085') {
         row.units_per_box = 4;
         row.inventory_unit = 'bidón 5 L';
         row.pricing_mode = 'PER_BOX';
@@ -797,7 +797,7 @@ export const OcrFacturasView = {
     // Mantener el segundo como faltante reclamado, fuera de la mercadería recibida.
     let lampazoSeen = 0;
     for (const row of rows) {
-      if (row.code === '2000085') {
+      if (/#\s*7572\b/.test(text) && row.code === '2000085') {
         lampazoSeen++;
         if (lampazoSeen > 1) {
           row.pending_supplier_claim = true;
@@ -832,7 +832,7 @@ export const OcrFacturasView = {
     }
     const codes = rows.map(r=>r.code);
     const duplicates=[...new Set(codes.filter((code,i)=>codes.indexOf(code)!==i))];
-    return {rows,consolidated,duplicates,orderNumber:text.match(/#\s*(7572)/)?.[1]||'7572'};
+    return {rows,consolidated,duplicates,orderNumber:text.match(/#\s*(\d{4,8})/)?.[1]||''};
   },
 
   async handleFilesSelect(files) {
@@ -888,7 +888,8 @@ export const OcrFacturasView = {
       const lines = allText.split(/\n/).map(x => x.trim()).filter(Boolean);
       const sysParsed = this.parseSysOrderText(allText);
       const dateMatch = allText.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
-      const documentDate = dateMatch ? [dateMatch[3],dateMatch[2],dateMatch[1]].join('-') : '';
+      const usDate = allText.match(/(?:transacci[oó]n\s*:\s*|Fecha\s*\/\s*Hora[\s\S]{0,120}?)(\d{1,2})\/(\d{1,2})\/(\d{4})/i) || (sysParsed ? allText.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/) : null);
+      const documentDate = usDate ? [usDate[3],usDate[1].padStart(2,'0'),usDate[2].padStart(2,'0')].join('-') : (dateMatch ? [dateMatch[3],dateMatch[2],dateMatch[1]].join('-') : '');
       const cuit = allText.match(/(?:CUIT|C\.U\.I\.T)[^\d]{0,15}(\d{2}[- ]?\d{8}[- ]?\d)/i)?.[1] || '';
       const invoiceNumber = allText.match(/(?:FACTURA|COMPROBANTE|N[°ºo.]\s*)[^\n]{0,50}?(\d{4,5}[- ]\d{6,8})/i)?.[1] || allText.match(/\b\d{4,5}-\d{6,8}\b/)?.[0] || '';
       const totalCandidates = [...allText.matchAll(/(?:TOTAL\s*(?:A\s*PAGAR)?|IMPORTE\s*TOTAL)\s*[:$ ]*([\d.,]+)/gi)];
