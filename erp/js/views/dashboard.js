@@ -10,7 +10,55 @@ let chartClientes = null;
 let chartRentabilidad = null;
 
 export const DashboardView = {
+  renderCentral(container) {
+    const data = window.app?.centralDashboard || {};
+    const integer = value => new Intl.NumberFormat('es-AR').format(Number(value) || 0);
+    const money = value => new Intl.NumberFormat('es-AR', {style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(value) || 0);
+    const stats = [
+      ['Productos', integer(data.products), 'package'],
+      ['Unidades en stock', integer(data.stock), 'boxes'],
+      ['Valor del stock', money(data.stock_value), 'wallet'],
+      ['Compras registradas', integer(data.purchases), 'truck'],
+      ['Total compras', money(data.purchases_total), 'receipt'],
+      ['Ventas registradas', integer(data.sales), 'shopping-cart'],
+      ['Total ventas', money(data.sales_total), 'chart-no-axes-column'],
+      ['Pedidos', integer(data.orders), 'clipboard-list'],
+      ['Clientes', integer(data.customers), 'users'],
+      ['Productos en mínimo', integer(data.low_stock), 'alert-triangle']
+    ];
+    container.innerHTML = `
+      <section class="space-y-6">
+        <div class="bg-white p-6 rounded-xl border border-slate-200">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 class="text-2xl font-bold text-[#0E3A6B]">Panel de control · CleanSur</h1>
+              <p class="text-sm text-slate-500 mt-2">Indicadores obtenidos de Supabase. Vista central de solo lectura.</p>
+            </div>
+            <span class="text-xs font-semibold px-3 py-2 rounded-lg bg-[#E9F4FB] text-[#0E3A6B]">Datos centralizados</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          ${stats.map(([label,value,icon]) => `
+            <article class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+              <div class="flex items-center gap-2 text-slate-500 text-xs font-semibold">
+                <i data-lucide="${icon}" class="w-4 h-4"></i><span>${label}</span>
+              </div>
+              <div class="text-xl font-extrabold text-[#0E3A6B] mt-3 break-words">${value}</div>
+            </article>`).join('')}
+        </div>
+        <div class="bg-[#E9F4FB] rounded-xl p-4 text-sm text-[#0E3A6B]">
+          Esta pantalla no permite modificar inventario ni registrar movimientos.
+          Para consultar productos, abrí el módulo Productos desde el menú.
+        </div>
+      </section>`;
+    if (window.lucide) window.lucide.createIcons();
+  },
+
   render(container) {
+    if (window.app?.centralReadOnly) {
+      this.renderCentral(container);
+      return;
+    }
     const metrics = db.getDashboardMetrics() || {};
     const products = db.getProducts() || [];
     const sales = (db.getSales() || []).filter(s => s.status === 'COMPLETADA');
