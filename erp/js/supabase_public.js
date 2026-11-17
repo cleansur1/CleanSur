@@ -34,3 +34,20 @@ export const staycleanCustomerRpc=async(name,payload={})=>{const token=await sta
 export const staycleanCustomerProfile=profile=>staycleanCustomerRpc('stayclean_customer_profile',{p_profile:profile??null});
 export const staycleanCustomerOrders=()=>staycleanCustomerRpc('stayclean_customer_orders');
 export const staycleanAuthenticatedOrder=order=>staycleanCustomerRpc('create_web_order_with_stock_deduction',{p_order:order});
+
+export const staycleanUploadPurchaseDocument=async(file,path)=>{
+ const token=sessionStorage.getItem('stayclean_staff_access_token');
+ if(!token)throw Error('Iniciá sesión como personal autorizado');
+ const safe=String(path).replace(/[^a-zA-Z0-9_./-]/g,'_');
+ const r=await fetch(STAYCLEAN_SUPABASE_URL+'/storage/v1/object/stayclean-purchase-documents/'+safe,{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file});
+ const x=await r.json().catch(()=>({}));
+ if(!r.ok)throw Error(x.message||'No se pudo guardar el comprobante original');
+ return safe;
+};
+export const staycleanPurchaseDocumentUrl=async(path)=>{
+ const token=sessionStorage.getItem('stayclean_staff_access_token');
+ if(!token)throw Error('Iniciá sesión como personal autorizado');
+ const r=await fetch(STAYCLEAN_SUPABASE_URL+'/storage/v1/object/sign/stayclean-purchase-documents/'+path,{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:300})});
+ const x=await r.json();if(!r.ok)throw Error(x.message||'No se pudo abrir el documento');
+ return STAYCLEAN_SUPABASE_URL+'/storage/v1'+x.signedURL;
+};
