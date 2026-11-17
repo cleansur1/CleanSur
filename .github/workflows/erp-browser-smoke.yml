@@ -24,9 +24,11 @@ jobs:
           const browser = await chromium.launch({headless:true});
           const page = await browser.newPage();
           const errors=[];
-          page.on('pageerror', e => errors.push(e.message));
+          page.on('pageerror', e => { errors.push(e.message); console.log('PAGE ERROR:', e.stack || e.message); });
+          page.on('console', m => { if (m.type()==='error') console.log('CONSOLE ERROR:',m.text()); });
+          page.on('response', r => { if(r.status()>=400) console.log('HTTP ERROR:',r.status(),r.url()); });
           await page.goto('http://127.0.0.1:8765/erp/?central=1&v=smoke', {waitUntil:'domcontentloaded'});
-          await page.locator('#central-form').waitFor({timeout:30000});
+          try { await page.locator('#central-form').waitFor({timeout:15000}); } catch(e) { console.log('BOOT TEXT:',await page.locator('#stayclean-boot-message').textContent().catch(()=>'<missing>')); throw e; }
           if(errors.length) throw new Error('JavaScript errors: '+errors.join(' | '));
           console.log('PASS: ERP central login form rendered without JavaScript exceptions');
           await browser.close();
