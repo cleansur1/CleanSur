@@ -198,6 +198,16 @@ export const OcrFacturasView = {
           </div>
         ` : ''}
 
+        <section class="bg-white border border-slate-200 rounded-xl p-4 space-y-2" aria-label="Conexión de personal a Supabase">
+          <div class="font-bold text-sm text-slate-800">Conexión segura para ingresar compras y stock</div>
+          <p class="text-xs text-slate-600">El acceso local al ERP no autoriza por sí solo movimientos en Supabase. Conectate con una cuenta habilitada de personal.</p>
+          <form id="ocr-staff-login" class="flex flex-wrap gap-2 items-center">
+            <input id="ocr-staff-email" type="email" required autocomplete="username" placeholder="Correo del personal" class="border rounded-lg px-3 py-2 text-sm min-w-[200px]">
+            <input id="ocr-staff-password" type="password" required autocomplete="current-password" placeholder="Contraseña" class="border rounded-lg px-3 py-2 text-sm min-w-[170px]">
+            <button type="submit" class="bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-semibold">Conectar Supabase</button>
+            <span id="ocr-staff-status" class="text-xs text-slate-600" role="status"></span>
+          </form>
+        </section>
         <!-- Barra Superior Compacta: Subir Archivo + Carga Rápida de Facturas del Día -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5">
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
@@ -685,6 +695,31 @@ export const OcrFacturasView = {
   },
 
   bindEvents() {
+    const loginForm=document.getElementById('ocr-staff-login');
+    if(loginForm) {
+      const status=document.getElementById('ocr-staff-status');
+      status.textContent=sessionStorage.getItem('stayclean_staff_access_token')?'Sesión vinculada; se verificará al confirmar.':'Sin sesión de Supabase';
+      loginForm.addEventListener('submit',async e=>{
+        e.preventDefault();
+        const email=document.getElementById('ocr-staff-email').value.trim();
+        const password=document.getElementById('ocr-staff-password').value;
+        const button=loginForm.querySelector('button[type="submit"]');
+        button.disabled=true;status.textContent='Verificando permisos...';
+        try {
+          const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
+          const res=await fetch(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+          const session=await res.json();
+          if(!res.ok||!session.access_token)throw Error(session.error_description||session.msg||'Credenciales inválidas');
+          const check=await fetch(base+'/rest/v1/rpc/stayclean_staff_purchase_lookup',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:'{}'});
+          const staff=await check.json();
+          if(!check.ok||!staff?.products||!staff?.suppliers)throw Error('Esta cuenta no tiene permisos de personal en Supabase');
+          sessionStorage.setItem('stayclean_staff_access_token',session.access_token);
+          status.textContent='Personal autorizado: conexión lista para recibir compras.';
+          document.getElementById('ocr-staff-password').value='';
+        }catch(err){sessionStorage.removeItem('stayclean_staff_access_token');status.textContent='Error: '+err.message;}
+        finally{button.disabled=false;}
+      });
+    }
     const dropzone = document.getElementById('ocr-dropzone');
     const fileInput = document.getElementById('ocr-file-input');
 
