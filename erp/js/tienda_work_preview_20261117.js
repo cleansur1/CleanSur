@@ -1,14 +1,13 @@
 // Controlador de Tienda Nube / Catálogo Público para Clientes
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
-import { db } from './db.js';
 import { Formatter } from './models.js';
-import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, staycleanCreateMpCheckout, staycleanMpCheckoutStatus } from './supabase_public_work_preview_20261117.js';
+import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanCreateMpCheckout, staycleanMpCheckoutStatus } from './supabase_public_work_preview_20261117.js?v=qa-isolated-1';
 
 class TiendaStandaloneApp {
   constructor() {
     this.products = [];
     this.cart = this.loadCart();
-    this.pendingRequestId = sessionStorage.getItem('stayclean_pending_order_id') || null;
+    this.pendingRequestId = sessionStorage.getItem('stayclean_qa_pending_order_id') || null;
     this.customerProfile = null;
     this.activeFilters = {
       availability: 'all',
@@ -32,7 +31,7 @@ class TiendaStandaloneApp {
 
   loadCart() {
     try {
-      const saved = localStorage.getItem('caviahue_tienda_cart');
+      const saved = localStorage.getItem('stayclean_qa_cart');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -40,7 +39,7 @@ class TiendaStandaloneApp {
   }
 
   saveCart() {
-    localStorage.setItem('caviahue_tienda_cart', JSON.stringify(this.cart));
+    localStorage.setItem('stayclean_qa_cart', JSON.stringify(this.cart));
     this.updateCartBadge();
   }
 
@@ -245,52 +244,7 @@ class TiendaStandaloneApp {
       console.error('No se pudo cargar el catálogo de Supabase', error);
       alert('No se pudo conectar al catálogo de StayClean. Intentá nuevamente más tarde.');
     }
-    return;
-    // Cargar productos del ERP con enriquecimiento de catálogo estilo Voltra
-    const raw = db.getProducts().filter(p => p.active !== false);
-    
-    this.products = raw.map((p, idx) => {
-      const salePrice = p.sale_price || 0;
-      // Precios de referencia / comparación tachados para generar badges -XX% OFF reales
-      let referencePrice = Number(p.reference_price) || 0;
-      let discountPct = 0;
-      if (referencePrice > salePrice) {
-        discountPct = Math.round(((referencePrice - salePrice) / referencePrice) * 100);
-      } else {
-        const discountPcts = [35, 25, 40, 50, 30, 20, 15];
-        discountPct = discountPcts[idx % discountPcts.length];
-        referencePrice = Math.round(salePrice / (1 - (discountPct / 100)));
-      }
 
-      // Identificar si tiene presentaciones / opciones para el botón Voltra
-      const hasOptions = p.presentation && (
-        p.presentation.toLowerCase().includes('caja') ||
-        p.presentation.toLowerCase().includes('bulto') ||
-        p.presentation.toLowerCase().includes('bidón') ||
-        p.presentation.toLowerCase().includes('pack')
-      );
-
-      // Tags promocionales (NUEVO, HOTELERÍA, GASTRONOMÍA, etc.)
-      const badges = [];
-      if (p.promo_badge) {
-        badges.push({ text: p.promo_badge, color: 'bg-rose-600 text-white' });
-      } else {
-        if (idx % 4 === 0) badges.push({ text: 'NUEVO', color: 'bg-rose-600 text-white' });
-        if (p.category_id === 'cat-1' || p.category_id === 'cat-5') badges.push({ text: 'HOTELERÍA', color: 'bg-indigo-600 text-white' });
-        if (p.category_id === 'cat-4') badges.push({ text: 'GASTRONOMÍA', color: 'bg-amber-600 text-white' });
-      }
-
-      return {
-        ...p,
-        sale_price: salePrice,
-        reference_price: referencePrice,
-        discount_pct: discountPct,
-        has_options: hasOptions,
-        promo_badges: badges,
-        in_stock: (p.current_stock || 0) > 0,
-        img_url: db.getProductImage(p)
-      };
-    });
   }
 
   setupEventListeners() {
@@ -918,19 +872,14 @@ class TiendaStandaloneApp {
         <!-- Método de Pago Preferido -->
         <div class="space-y-1.5">
           <label class="block font-bold text-slate-700">Forma de Pago:</label>
-          <select id="checkoutPaymentMethod" onchange="document.getElementById(\'checkoutSubmitLabel\').textContent = this.value === \'Mercado Pago\' ? \'Continuar a Mercado Pago\' : \'Confirmar y Enviar Pedido por WhatsApp\'" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
-            <option value="Efectivo contra entrega">Efectivo contra entrega en Caviahue</option>
-            <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
-            <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
-            <option value="Mercado Pago">Mercado Pago (pago online de prueba)</option>
-          </select>
+          <p>Mercado Pago de prueba</p>
         </div>
 
         <!-- Botón de Envío por WhatsApp -->
         <div class="pt-3 border-t border-slate-100 space-y-2">
           <button onclick="window.tiendaApp.submitOrderToWhatsApp()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99]">
             <i data-lucide="send" class="w-4 h-4"></i>
-            <span id="checkoutSubmitLabel">Confirmar y Enviar Pedido por WhatsApp</span>
+            <span id="checkoutSubmitLabel">Continuar a Mercado Pago</span>
           </button>
           <p class="text-[10px] text-slate-400 text-center">
             Se abrirá WhatsApp con el pedido redactado para que lo envíes con un solo clic.
@@ -968,9 +917,9 @@ class TiendaStandaloneApp {
         this.cart = [];
         this.saveCart();
         this.pendingRequestId = null;
-        sessionStorage.removeItem('stayclean_pending_order_id');
-        sessionStorage.removeItem('stayclean_pending_mp_order_id');
-        sessionStorage.removeItem('stayclean_pending_mp_cart');
+        sessionStorage.removeItem('stayclean_qa_pending_order_id');
+        sessionStorage.removeItem('stayclean_qa_pending_mp_order_id');
+        sessionStorage.removeItem('stayclean_qa_pending_mp_cart');
         await this.loadProducts();
         alert('¡Pago aprobado! Pedido ' + status.order_number + ' registrado correctamente en StayClean.');
       } else if (status.status === 'pending' || status.status === 'fulfillment_review') {
@@ -980,8 +929,8 @@ class TiendaStandaloneApp {
           alert('El pago todavía está pendiente de confirmación. No vuelvas a pagar; podés consultar el estado desde tu cuenta.');
         }
       } else {
-        sessionStorage.removeItem('stayclean_pending_mp_order_id');
-        sessionStorage.removeItem('stayclean_pending_mp_cart');
+        sessionStorage.removeItem('stayclean_qa_pending_mp_order_id');
+        sessionStorage.removeItem('stayclean_qa_pending_mp_cart');
         alert('El pago no figura aprobado. Tu carrito se conserva para que puedas volver a intentarlo.');
       }
     } catch (error) {
@@ -1000,53 +949,27 @@ class TiendaStandaloneApp {
     const prof = this.customerProfile;
     if (!prof || !this.cart.length) return;
     this.sendingOrder = true;
-    const requestId = this.pendingRequestId || (this.pendingRequestId = crypto.randomUUID());
-    sessionStorage.setItem('stayclean_pending_order_id', requestId);
-    const city = /copahue/i.test(prof.zone || '') ? 'Copahue' : 'Caviahue';
     try {
-      const paymentMethod = document.getElementById('checkoutPaymentMethod')?.value || 'Efectivo contra entrega';
-      if (paymentMethod === 'Mercado Pago') {
-        // Never reuse a payment intent for a changed cart: the server intentionally
-        // reuses the original price/quantity snapshot for an existing request_id.
-        const cartFingerprint = JSON.stringify(
-          this.cart.map(item => [String(item.id), Number(item.quantity)])
-            .sort((a, b) => a[0].localeCompare(b[0]))
-        );
-        const previousFingerprint = sessionStorage.getItem('stayclean_pending_mp_cart');
-        if (previousFingerprint !== cartFingerprint) {
-          sessionStorage.removeItem('stayclean_pending_mp_order_id');
-        sessionStorage.removeItem('stayclean_pending_mp_cart');
-        }
-        const mpRequestId = sessionStorage.getItem('stayclean_pending_mp_order_id') || crypto.randomUUID();
-        sessionStorage.setItem('stayclean_pending_mp_cart', cartFingerprint);
-        sessionStorage.setItem('stayclean_pending_mp_order_id', mpRequestId);
-        const checkout = await staycleanCreateMpCheckout(
-          mpRequestId,
-          this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
-        );
-        if (!checkout.checkout_url || !/^https:\/\//.test(checkout.checkout_url)) throw new Error('Mercado Pago no devolvió una URL válida');
-        window.location.assign(checkout.checkout_url);
-        return;
+      // Never reuse a payment intent for a changed cart: the server intentionally
+      // reuses the original price/quantity snapshot for an existing request_id.
+      const cartFingerprint = JSON.stringify(
+        this.cart.map(item => [String(item.id), Number(item.quantity)])
+          .sort((a, b) => a[0].localeCompare(b[0]))
+      );
+      const previousFingerprint = sessionStorage.getItem('stayclean_qa_pending_mp_cart');
+      if (previousFingerprint !== cartFingerprint) {
+        sessionStorage.removeItem('stayclean_qa_pending_mp_order_id');
+        sessionStorage.removeItem('stayclean_qa_pending_mp_cart');
       }
-      const savedOrder = await staycleanAuthenticatedOrder({
-        request_id: requestId,
-        customer_name: prof.name,
-        customer_phone: prof.phone,
-        customer_email: prof.email || '',
-        delivery_address: prof.address || '',
-        delivery_city: city,
-        items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
-      });
-      const lines = this.cart.map(item => `• ${item.quantity}x ${item.name}`).join('\\n');
-      const message = `*PEDIDO STAYCLEAN*\\nN°: ${savedOrder.order_number}\\nCliente: ${prof.name}\\nTel: ${prof.phone}\\nEntrega: ${prof.address}, ${city}\\n${lines}\\nTotal: ${Formatter.money(Number(savedOrder.total || 0))}\\nPedido registrado; pendiente de coordinación.`;
-      this.cart = [];
-      this.saveCart();
-      this.pendingRequestId = null;
-      sessionStorage.removeItem('stayclean_pending_order_id');
-      this.closeOrderConfirmation();
-      await this.loadProducts();
-      window.open(`https://wa.me/${this.companyWhatsApp}?text=${encodeURIComponent(message)}`, '_blank');
-      alert(`Pedido ${savedOrder.order_number} registrado correctamente en StayClean. Podés consultar e imprimir tu comprobante desde Mi cuenta → PEDIDOS.`);
+      const mpRequestId = sessionStorage.getItem('stayclean_qa_pending_mp_order_id') || crypto.randomUUID();
+      sessionStorage.setItem('stayclean_qa_pending_mp_cart', cartFingerprint);
+      sessionStorage.setItem('stayclean_qa_pending_mp_order_id', mpRequestId);
+      const checkout = await staycleanCreateMpCheckout(
+        mpRequestId,
+        this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+      );
+      if (!checkout.checkout_url || !/^https:\/\//.test(checkout.checkout_url)) throw new Error('Mercado Pago no devolvió una URL válida');
+      window.location.assign(checkout.checkout_url);
     } catch (error) {
       console.error('Error registrando pedido en Supabase', error);
       alert('No se registró el pedido: ' + error.message + '. El carrito permanece intacto.');
