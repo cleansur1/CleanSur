@@ -82,7 +82,7 @@ export const ComprasView = {
 
     // Detectar compras con discrepancias de conciliación (|diff| > 0.05)
     const unconciliatedPurchases = activePurchases.filter(p => {
-      const stated = p.invoice_stated_total !== undefined ? Number(p.invoice_stated_total) : Number(p.total_final);
+      const stated = p.invoice_stated_total != null && p.invoice_stated_total !== '' ? Number(p.invoice_stated_total) : Number(p.total_final);
       const calc = Number(p.total_final) || 0;
       const diff = Math.abs(stated - calc);
       return (p.reconciliation && p.reconciliation.status === 'DIFERENCIA') || diff > 0.05;
@@ -142,7 +142,7 @@ export const ComprasView = {
                 </p>
                 <div class="flex flex-wrap items-center gap-2 mt-3">
                   ${unconciliatedPurchases.map(p => {
-                    const stated = p.invoice_stated_total !== undefined ? Number(p.invoice_stated_total) : Number(p.total_final);
+                    const stated = p.invoice_stated_total != null && p.invoice_stated_total !== '' ? Number(p.invoice_stated_total) : Number(p.total_final);
                     const diff = Number((stated - (Number(p.total_final) || 0)).toFixed(2));
                     return `
                       <button onclick="window.comprasModule.openEditInvoiceModal('${p.id}')" class="px-3 py-1.5 bg-white hover:bg-rose-100 text-rose-950 rounded-xl text-xs font-bold border border-rose-300 shadow-sm flex items-center gap-2 transition">
@@ -241,7 +241,7 @@ export const ComprasView = {
                     </td>
                   </tr>
                 ` : filteredPurchases.map(p => {
-                  const stated = p.invoice_stated_total !== undefined ? Number(p.invoice_stated_total) : Number(p.total_final);
+                  const stated = p.invoice_stated_total != null && p.invoice_stated_total !== '' ? Number(p.invoice_stated_total) : Number(p.total_final);
                   const diff = Number((stated - (Number(p.total_final) || 0)).toFixed(2));
                   const isConciliated = (!p.reconciliation || p.reconciliation.status === 'CONCILIADA') && Math.abs(diff) <= 0.05;
 
