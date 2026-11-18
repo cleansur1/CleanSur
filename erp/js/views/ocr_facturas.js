@@ -767,36 +767,33 @@ export const OcrFacturasView = {
 
   parseSysOrderText(raw) {
     const text = String(raw || '').replace(/\u00a0/g, ' ');
-    if (!/SYS PRODUCTOS DE LIMPIEZA|SATURNINO FRANCO/i.test(text)) return null;
+    if (!/\bSYS\s+(?:PRODUCTOS\s+DE\s+LIMPIEZA|LABORATORIO)\b|SATURNINO FRANCO/i.test(text)) return null;
     const money = v => Number(String(v).replace(/\./g,'').replace(',','.'));
     const rows = [];
-    const re = /\b(200\d{4})\s+(CAJA\s+.{4,110}?)\s+(\d{1,3})\s+\$?\s*([\d.]+,\d{2})\s+\$?\s*([\d.]+,\d{2})(?=\s|$)/gi;
-    for (const m of text.matchAll(re)) {
-      const desc=m[2].replace(/\s+/g,' ').trim();
-      const qty=Number(m[3]), price=money(m[4]), total=money(m[5]);
-      if (Math.abs(qty*price-total)>0.03) continue;
-      rows.push({code:m[1],description:desc,quantity:qty,boxes_count:qty,unit_price:price,line_total:total,discount_pct:0});
-    }
-    if (!rows.length) {
-      const rawOrder = /\b(200\d{4})\s+\$\s*([\d.]+,\d{2})\s+\$\s*([\d.]+,\d{2})\s+(\d{1,3})\s+(CAJA\s+[^\n]+)/gi;
-      for (const m of text.matchAll(rawOrder)) {
-        const qty=Number(m[4]), price=money(m[2]), total=money(m[3]);
-        if (Math.abs(qty*price-total)>0.03) continue;
-        rows.push({code:m[1],description:m[5].trim(),quantity:qty,boxes_count:qty,unit_price:price,line_total:total,discount_pct:0});
+    const linePattern = /^(200\d{4})[ \t]+(.{4,140}?)[ \t]+(\d{1,3})[ \t]+\$?[ \t]*([\d.]+,\d{2})[ \t]+\$?[ \t]*([\d.]+,\d{2})$/i;
+    const rawOrder = /^(200\d{4})\s+\$\s*([\d.]+,\d{2})\s+\$\s*([\d.]+,\d{2})\s+(\d{1,3})\s+(CAJA\s+.+)$/i;
+    const orderNumber = text.match(/(?:#\s*|\bPED(?:IDO)?\s*[-:#]?\s*)(\d{4,8})\b/i)?.[1] || '';
+    let unmatchedRows = 0;
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!/^200\d{4}\b/.test(line)) continue;
+      const match = line.match(linePattern);
+      const alternate = match ? null : line.match(rawOrder);
+      if (!match && !alternate) {
+        unmatchedRows++;
+        continue;
       }
-    }
-    // SYS 7601: columnas en orden CODIGO DESCRIPCION CANTIDAD PRECIO UNIT. TOTAL.
-    // El parser general anterior exige un orden distinto en algunos PDF.
-    if (!rows.length) {
-      const lineRe = /^\s*(200\d{4})\s+(CAJA\s+[^\n]+?)\s+(\d{1,3})\s+\$\s*([\d.]+,\d{2})\s+\$\s*([\d.]+,\d{2})\s*$/gim;
-      for (const m of text.matchAll(lineRe)) {
-        const qty=Number(m[3]),price=money(m[4]),lineTotal=money(m[5]);
-        if (Math.abs(qty*price-lineTotal)>0.03) continue;
-        const pack=m[2].match(/(\d+)\s+UNID\s+X\s+(\d+)\s*LTS?/i);
-        rows.push({code:m[1],description:m[2].trim(),quantity:qty,boxes_count:qty,
-          units_per_box:pack?Number(pack[1]):1,unit_price:price,line_total:lineTotal,
-          discount_pct:0,pricing_mode:'PER_BOX'});
+      const [code, description, rawQuantity, rawPrice, rawTotal] = match
+        ? match.slice(1) : [alternate[1], alternate[5], alternate[4], alternate[2], alternate[3]];
+      const quantity = Number(rawQuantity);
+      const price = money(rawPrice);
+      const total = money(rawTotal);
+      if (quantity <= 0 || !Number.isFinite(price) || !Number.isFinite(total) || Math.abs(quantity * price - total) > 0.03) {
+        unmatchedRows++;
+        continue;
       }
+      rows.push({code, description:description.replace(/\s+/g, ' ').trim(), quantity,
+        boxes_count:quantity, unit_price:price, line_total:total, discount_pct:0});
     }
     // Normalizar conversiones incluso si la expresión genérica reconoció la línea.
     for (const row of rows) {
@@ -816,7 +813,7 @@ export const OcrFacturasView = {
         row.inventory_unit = 'bidón 5 L';
         row.pricing_mode = 'PER_BOX';
       }
-      if (/#\s*7572\b/.test(text) && row.code === '2000085') {
+      if (orderNumber === '7572' && row.code === '2000085') {
         row.units_per_box = 4;
         row.inventory_unit = 'bidón 5 L';
         row.pricing_mode = 'PER_BOX';
@@ -827,7 +824,7 @@ export const OcrFacturasView = {
     // Mantener el segundo como faltante reclamado, fuera de la mercadería recibida.
     let lampazoSeen = 0;
     for (const row of rows) {
-      if (/#\s*7572\b/.test(text) && row.code === '2000085') {
+      if (orderNumber === '7572' && row.code === '2000085') {
         lampazoSeen++;
         if (lampazoSeen > 1) {
           row.pending_supplier_claim = true;
@@ -862,7 +859,7 @@ export const OcrFacturasView = {
     }
     const codes = rows.map(r=>r.code);
     const duplicates=[...new Set(codes.filter((code,i)=>codes.indexOf(code)!==i))];
-    return {rows,consolidated,duplicates,orderNumber:text.match(/#\s*(\d{4,8})/)?.[1]||''};
+    return {rows,consolidated,duplicates,orderNumber,unmatchedRows};
   },
 
   async handleFilesSelect(files) {
@@ -948,14 +945,14 @@ export const OcrFacturasView = {
       this.ocrPreviewLines = lines;
       // Sólo habilitar confirmación cuando la lectura de SYS es íntegra y conciliada.
       const parsedTotal=(sysParsed?.rows||[]).reduce((sum,row)=>sum+Number(row.line_total||0),0);
-      const validSys = !!sysParsed && !!sysParsed.orderNumber && sysParsed.rows.length===4 &&
+      const validSys = !!sysParsed && !!sysParsed.orderNumber && sysParsed.rows.length > 0 && sysParsed.unmatchedRows === 0 &&
         sysParsed.rows.every(row=>row.code && row.description && Number(row.quantity)>0 && Number(row.units_per_box)>0) &&
         !sysParsed.duplicates.length && Number.isFinite(total) && total>0 && Math.abs(parsedTotal-total)<0.02;
       this.ocrRequiresReview = !validSys;
       if (validSys) this.extractedInvoice.key='OCR_SYS_VALIDADO';
       this.isProcessing = false;
       this.refreshResultView();
-      alert(sysParsed ? ('Pedido SYS: ' + sysParsed.rows.length + ' renglones detectados. ' + (sysParsed.duplicates.length ? 'Códigos repetidos: ' + sysParsed.duplicates.join(', ') + '. ' : '') + 'Revisá el documento. El registro sigue bloqueado.') : 'Texto extraído del documento real. El formato de productos aún no se reconoce automáticamente; no se modificó stock.');
+      if (!validSys) alert(sysParsed ? ('Pedido SYS: ' + sysParsed.rows.length + ' renglones detectados. ' + (sysParsed.duplicates.length ? 'Códigos repetidos: ' + sysParsed.duplicates.join(', ') + '. ' : '') + 'Revisá el documento. El registro sigue bloqueado.') : 'Texto extraído del documento real. El formato de productos aún no se reconoce automáticamente; no se modificó stock.');
     } catch(error) {
       this.isProcessing = false;
       this.extractedInvoice = null;
