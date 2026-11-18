@@ -670,15 +670,52 @@ export const ComprasView = {
     modal.classList.remove('hidden');
   },
 
-  editCentralPurchase(purchaseId) {
-    this.viewCentralPurchase(purchaseId);
-    alert('La edición de una compra confirmada requiere una rectificación segura en Supabase. Todavía no está habilitada; no se modificó el stock.');
+  async runCentralPurchaseAction(purchaseId,action,changes) {
+    const {getAdminSession}=await import('../supabase_admin.js');
+    const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY}=await import('../supabase_public.js');
+    const session=getAdminSession();
+    if(!session?.access_token)throw new Error('Iniciá sesión como personal autorizado en Supabase');
+    const response=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/stayclean_staff_manage_purchase',{
+      method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},
+      body:JSON.stringify({p_purchase_id:purchaseId,p_action:action,p_changes:changes})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||!data.ok)throw new Error(data.message||'No se pudo aplicar el cambio en Supabase');
+    // La lectura central debe actualizarse antes de mostrar un resultado confirmado.
+    const {readCentral}=await import('../supabase_erp_adapter.js');
+    const purchases=await readCentral('purchases',{order:'created_at.desc',limit:500});
+    db.setTable('purchases',purchases);
+    this.renderPurchasesList(document.getElementById('app-content'),purchases,db.getSuppliers());
+    return data;
   },
 
-  cancelPurchase(purchaseId) {
-    const purchase=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
-    if(!purchase)return;
-    alert('No se eliminó '+(purchase.invoice_number||purchase.purchase_number)+'. La anulación debe revertir movimientos en Supabase de forma transaccional y conservar la auditoría.');
+  async editCentralPurchase(purchaseId) {
+    const p=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
+    if(!p)return alert('Comprobante no encontrado');
+    const number=prompt('Número de comprobante:',p.invoice_number||'');
+    if(number===null)return;
+    const notes=prompt('Observaciones (opcional):',p.notes||'');
+    if(notes===null)return;
+    const reason=prompt('Motivo de la modificación (obligatorio):','');
+    if(reason===null)return;
+    if(!number.trim()||reason.trim().length<5)return alert('Ingresá número y motivo de al menos 5 caracteres');
+    try {
+      await this.runCentralPurchaseAction(purchaseId,'EDITAR_DATOS',{invoice_number:number.trim(),notes,reason:reason.trim()});
+      alert('Comprobante actualizado en Supabase. Las cantidades de stock no se modificaron.');
+    }catch(e){alert('No se guardó: '+e.message);}
+  },
+
+  async cancelPurchase(purchaseId) {
+    const p=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
+    if(!p)return alert('Comprobante no encontrado');
+    const reason=prompt('Motivo de anulación de '+p.invoice_number+' (se intentará revertir el stock):','');
+    if(reason===null)return;
+    if(reason.trim().length<8)return alert('Ingresá un motivo de al menos 8 caracteres');
+    if(!confirm('¿Confirmás ANULAR '+p.invoice_number+'? Se revertirán sus movimientos de stock si es seguro hacerlo. Esta operación queda registrada.'))return;
+    try{
+      await this.runCentralPurchaseAction(purchaseId,'ANULAR',{reason:reason.trim()});
+      alert('Compra anulada en Supabase y stock revertido. El registro permanece para auditoría.');
+    }catch(e){alert('No se anuló ni se modificó stock: '+e.message);}
   },
 
   openEditInvoiceModal(purchaseId) {
