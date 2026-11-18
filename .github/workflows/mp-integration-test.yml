@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - test/mp-checkout-current-main-20261116
+      - fix/cleansur-mp-webhook
   workflow_dispatch:
 jobs:
   webhook:

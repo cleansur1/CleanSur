@@ -2,32 +2,36 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { stripTypeScriptTypes } from 'node:module';
 import { createHmac, webcrypto } from 'node:crypto';
 
 // Runs the repository's actual webhook source with mocked external dependencies.
 // Run: node --test tests/mp-webhook.integration.test.mjs
-const source = readFileSync(new URL('../supabase/functions/mp-webhook/index.ts', import.meta.url), 'utf8')
-  .replace(/^import .*;\s*$/gm, '')
-  .replace('function response(status: number, body = "ok")', 'function response(status, body = "ok")')
-  .replace('async function verifySignature(secret: string, signature: string, requestId: string, dataId: string)', 'async function verifySignature(secret, signature, requestId, dataId)')
-  .replace('const parts: Record<string, string> = {}', 'const parts = {}')
-  .replace('Deno.serve(async (req: Request) =>', 'Deno.serve(async (req) =>')
-  .replaceAll('Deno.env.get("SUPABASE_URL")!', 'Deno.env.get("SUPABASE_URL")')
-  .replaceAll('Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!', 'Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")');
+const source = stripTypeScriptTypes(
+  readFileSync(new URL('../supabase/functions/mp-webhook/index.ts', import.meta.url), 'utf8')
+    .replace(/^import .*;$/gm, ''),
+);
 
 function signature(dataId, requestId, secret='test-secret') {
   const ts='1234567890';
-  const manifest=`id:${dataId.toLowerCase()};request-id:${requestId};ts:${ts};`;
+  const manifest=`id:${dataId};request-id:${requestId};ts:${ts};`;
   return `ts=${ts},v1=${createHmac('sha256', secret).update(manifest).digest('hex')}`;
 }
-function setup({status='processed',detail='accredited',stockReview=false,dbError=false,liveMode=false}={}) {
-  const state={finalizations:0,updates:0,fetches:0,intentStatus:'pending',orderId:'order-123'};
-  const mpOrder={id:'order-123',live_mode:liveMode,external_reference:'11111111-1111-4111-8111-111111111111',status,status_detail:detail,total_paid_amount:100};
-  const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:mpOrder.external_reference,mp_order_id:state.orderId,status:state.intentStatus},error:null})})}),update:()=>({eq:()=>({eq:async()=>{state.updates++;return {error:dbError?{message:'db unavailable'}:null}}})})}),rpc:async()=>{state.finalizations++;if(!stockReview && !dbError)state.intentStatus='approved';if(stockReview)state.intentStatus='fulfillment_review';return {data:stockReview?{requires_manual_review:true}:{success:true},error:dbError?{message:'db unavailable'}:null}}};
+function setup({status='processed',detail='accredited',stockReview=false,dbError=false,liveMode=false,mpOrderId='ORDTST123'}={}) {
+  const state={finalizations:0,updates:0,lastUpdate:null,fetches:0,intentStatus:'pending',orderId:mpOrderId};
+  const mpOrder={id:mpOrderId,live_mode:liveMode,external_reference:'11111111-1111-4111-8111-111111111111',status,status_detail:detail,total_paid_amount:100};
+  const admin={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:mpOrder.external_reference,mp_order_id:state.orderId,status:state.intentStatus},error:null})})}),update:payload=>({eq:()=>({eq:async()=>{state.updates++;state.lastUpdate=payload;return {error:dbError?{message:'db unavailable'}:null}}})})}),rpc:async()=>{state.finalizations++;if(!stockReview && !dbError)state.intentStatus='approved';if(stockReview)state.intentStatus='fulfillment_review';return {data:stockReview?{requires_manual_review:true}:{success:true},error:dbError?{message:'db unavailable'}:null}}};
   let handler;
   const ctx={Deno:{env:{get:k=>({MERCADOPAGO_ACCESS_TOKEN:'fake',MERCADOPAGO_WEBHOOK_SECRET:'test-secret',SUPABASE_URL:'https://example.invalid',SUPABASE_SERVICE_ROLE_KEY:'fake'})[k]},serve:fn=>{handler=fn}},createClient:()=>admin,fetch:async()=>{state.fetches++;return {ok:true,json:async()=>mpOrder}},Response,URL,TextEncoder,Uint8Array,crypto:webcrypto,console};
   vm.runInNewContext(source,ctx,{filename:'mp-webhook/index.ts'});
-  const send=({id='order-123',signed=true,method='POST'}={})=>handler(new Request(`https://example.invalid/mp-webhook?data.id=${id}`,{method,headers:{'x-request-id':'req-1','x-signature':signed?signature(id,'req-1'):'ts=1234567890,v1=invalid'}}));
+  const send = ({id=mpOrderId, signed=true, method='POST', query, signedId=id}={}) =>
+    handler(new Request(`https://example.invalid/mp-webhook?${query ?? `data.id=${id}`}`, {
+      method,
+      headers: {
+        'x-request-id': 'req-1',
+        'x-signature': signed ? signature(signedId, 'req-1') : 'ts=1234567890,v1=invalid',
+      },
+    }));
   return {send,state};
 }
 test('approved payment finalizes exactly once on repeated notifications',async()=>{const x=setup();assert.equal((await x.send()).status,200);assert.equal((await x.send()).status,200);assert.equal(x.state.finalizations,1)});
@@ -41,3 +45,27 @@ test('non-POST request is rejected',async()=>{const x=setup();assert.equal((awai
 
 test('signed live-mode payment finalizes when configured credentials can retrieve it',async()=>{const x=setup({liveMode:true});assert.equal((await x.send()).status,200);assert.equal(x.state.finalizations,1)});
 test('mismatched Mercado Pago order is ignored',async()=>{const x=setup();x.state.orderId='another-order';assert.equal((await x.send()).status,200);assert.equal(x.state.finalizations,0)});
+
+test('the signed mixed-case resource ID is preserved', async () => {
+  const x = setup({mpOrderId: 'ORDTSTAbC123'});
+  assert.equal((await x.send()).status, 200);
+  assert.equal(x.state.finalizations, 1);
+});
+test('only one canonical query data.id is accepted', async () => {
+  const x = setup();
+  assert.equal((await x.send({query: 'id=ORDTST123'})).status, 400);
+  assert.equal((await x.send({query: 'data.id=ORDTST123&data.id=ORDTST123'})).status, 400);
+  assert.equal(x.state.fetches, 0);
+});
+test('canceled order updates the intent without finalizing', async () => {
+  const x = setup({status: 'canceled', detail: 'canceled'});
+  assert.equal((await x.send()).status, 200);
+  assert.equal(x.state.lastUpdate.status, 'cancelled');
+  assert.equal(x.state.finalizations, 0);
+});
+test('a notification arriving before the order link is persisted gets a retry', async () => {
+  const x = setup();
+  x.state.orderId = null;
+  assert.equal((await x.send()).status, 503);
+  assert.equal(x.state.finalizations, 0);
+});

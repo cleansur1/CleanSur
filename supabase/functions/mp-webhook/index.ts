@@ -6,30 +6,26 @@ function response(status: number, body = "ok") {
 }
 
 async function verifySignature(secret: string, signature: string, requestId: string, dataId: string) {
-  const parts: Record<string, string> = {};
+  const parts = new Map<string, string>();
   for (const part of signature.split(",")) {
     const separator = part.indexOf("=");
     if (separator < 1) continue;
     const name = part.slice(0, separator).trim();
-    const value = part.slice(separator + 1).trim();
-    if (name && value) parts[name] = value;
+    if (name !== "ts" && name !== "v1") continue;
+    if (parts.has(name)) return false;
+    parts.set(name, part.slice(separator + 1).trim());
   }
-  if (!parts.ts || !parts.v1) {
-    return { valid: false, hasTimestamp: Boolean(parts.ts), hasV1: Boolean(parts.v1), digestMatches: false };
-  }
-  const manifest = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${parts.ts};`;
+  const timestamp = parts.get("ts") ?? "";
+  const digest = parts.get("v1") ?? "";
+  if (!/^\d{10,13}$/.test(timestamp) || !/^[a-f\d]{64}$/i.test(digest)) return false;
+
+  const encoder = new TextEncoder();
+  const manifest = `id:${dataId};request-id:${requestId};ts:${timestamp};`;
   const key = await crypto.subtle.importKey(
-    "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+    "raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"],
   );
-  const signed = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(manifest)));
-  const digest = Array.from(signed).map((b) => b.toString(16).padStart(2, "0")).join("");
-  let diff = digest.length ^ parts.v1.length;
-  const length = Math.max(digest.length, parts.v1.length);
-  for (let i = 0; i < length; i++) {
-    diff |= (digest.charCodeAt(i) || 0) ^ (parts.v1.charCodeAt(i) || 0);
-  }
-  const digestMatches = diff === 0;
-  return { valid: digestMatches, hasTimestamp: true, hasV1: true, digestMatches };
+  const signatureBytes = Uint8Array.from(digest.match(/../g)!, (byte) => parseInt(byte, 16));
+  return crypto.subtle.verify("HMAC", key, signatureBytes, encoder.encode(manifest));
 }
 
 Deno.serve(async (req: Request) => {
@@ -42,7 +38,8 @@ Deno.serve(async (req: Request) => {
     if (!mpToken || !webhookSecret) return response(500, "webhook secrets not configured");
 
     const url = new URL(req.url);
-    const dataId = url.searchParams.get("data.id") ?? url.searchParams.get("id");
+    const signedIds = url.searchParams.getAll("data.id");
+    const dataId = signedIds.length === 1 ? signedIds[0] : "";
     const signature = req.headers.get("x-signature") ?? "";
     const requestId = req.headers.get("x-request-id") ?? "";
     if (!dataId || !signature || !requestId) {
@@ -53,16 +50,8 @@ Deno.serve(async (req: Request) => {
       });
       return response(400, "missing signature data");
     }
-    const signatureCheck = await verifySignature(webhookSecret, signature, requestId, dataId);
-    if (!signatureCheck.valid) {
-      console.warn("MP webhook rejected: signature validation failed", {
-        signatureHeaderPresent: Boolean(signature),
-        signatureHasTimestamp: signatureCheck.hasTimestamp,
-        signatureHasV1: signatureCheck.hasV1,
-        digestMatches: signatureCheck.digestMatches,
-        requestIdPresent: Boolean(requestId),
-        dataIdPresent: Boolean(dataId),
-      });
+    if (!await verifySignature(webhookSecret, signature, requestId, dataId)) {
+      console.warn("MP webhook rejected: signature validation failed");
       return response(401, "invalid signature");
     }
 
@@ -72,8 +61,7 @@ Deno.serve(async (req: Request) => {
     );
     if (!orderResponse.ok) return response(502, "could not verify Mercado Pago order");
     const mpOrder = await orderResponse.json();
-    // A valid signed notification plus a successful authenticated Orders API lookup
-    // is authoritative in either test or live mode. Do not reject real payments.
+    if (mpOrder.id !== dataId) return response(502, "unexpected Mercado Pago order");
     const intentId = mpOrder.external_reference;
     if (!intentId) return response(200, "ignored: no external reference");
 
@@ -86,7 +74,9 @@ Deno.serve(async (req: Request) => {
       .eq("id", intentId)
       .maybeSingle();
     if (intentError) return response(500, "intent lookup failed");
-    if (!intent || intent.mp_order_id !== mpOrder.id) return response(200, "ignored: order not linked");
+    if (!intent) return response(200, "ignored: unknown attempt");
+    if (!intent.mp_order_id) return response(503, "checkout link not persisted yet");
+    if (intent.mp_order_id !== mpOrder.id) return response(200, "ignored: order not linked");
     if (intent.status === "approved") return response(200, "already processed");
     if (intent.status === "fulfillment_review") return response(200, "already flagged for manual fulfillment review");
 
