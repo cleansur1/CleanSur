@@ -295,14 +295,13 @@ export const ComprasView = {
                       </td>
                       <td class="sticky right-0 border-l border-slate-200 bg-white px-3 py-3 text-center whitespace-nowrap group-hover:bg-slate-50">
                         <div class="flex items-center justify-center gap-1">
-                        <button type="button" onclick="window.comprasModule.viewCentralPurchase(${attributeArgument(p.id)})" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-sm transition">
-                          <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-                          Ver
+                        <button type="button" onclick="window.comprasModule.viewCentralPurchase(${attributeArgument(p.id)})" aria-label="Ver factura" title="Ver factura" class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+                          <i data-lucide="eye" aria-hidden="true" class="w-4 h-4"></i>
                         </button>
                         ${p.status !== 'ANULADA' ? `
-                          <button type="button" onclick="window.comprasModule.editCentralPurchase(${attributeArgument(p.id)})" class="px-2 py-1.5 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold ml-1">Editar</button>
-                          <button type="button" onclick="window.comprasModule.cancelPurchase(${attributeArgument(p.id)})" title="Anula la factura y revierte el stock cuando corresponde" class="inline-flex items-center gap-1 px-2 py-1.5 text-rose-700 hover:bg-rose-50 rounded ml-1 transition">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Eliminar
+                          <button type="button" onclick="window.comprasModule.editCentralPurchase(${attributeArgument(p.id)})" aria-label="Editar factura" title="Editar factura" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"><i data-lucide="pencil" aria-hidden="true" class="w-4 h-4"></i></button>
+                          <button type="button" onclick="window.comprasModule.cancelPurchase(${attributeArgument(p.id)})" aria-label="Eliminar factura" title="Eliminar factura" class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-rose-700 hover:bg-rose-50">
+                            <i data-lucide="trash-2" aria-hidden="true" class="w-4 h-4"></i>
                           </button>
                         ` : ''}
                         </div>
