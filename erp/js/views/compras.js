@@ -121,6 +121,28 @@ export const ComprasView = {
       <div class="space-y-6 animate-fade-in">
         ${this.renderTopNavTabs('list', activeCount)}
 
+        <section class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <h2 class="font-extrabold text-slate-900 mb-3">Comprobantes registrados en Supabase</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left">
+              <thead><tr class="border-b text-slate-600"><th class="p-2">Fecha</th><th class="p-2">N.º comprobante</th><th class="p-2">Proveedor</th><th class="p-2 text-right">Total</th><th class="p-2">Acciones</th></tr></thead>
+              <tbody>
+                ${activePurchases.map(p=>`<tr class="border-b border-slate-100">
+                  <td class="p-2 whitespace-nowrap">${Formatter.date(p.date)}</td>
+                  <td class="p-2 font-mono font-semibold">${p.invoice_number||p.purchase_number}</td>
+                  <td class="p-2">${p.supplier_name||'-'}</td>
+                  <td class="p-2 text-right whitespace-nowrap font-semibold">${Formatter.money(p.total_final)}</td>
+                  <td class="p-2 whitespace-nowrap">
+                    <button type="button" class="px-2 py-1 rounded bg-blue-700 text-white" onclick="window.comprasModule.viewCentralPurchase('${p.id}')">Ver</button>
+                    <button type="button" class="px-2 py-1 rounded border border-blue-300" onclick="window.comprasModule.editCentralPurchase('${p.id}')">Editar</button>
+                    <button type="button" class="px-2 py-1 rounded border border-rose-300 text-rose-700" onclick="window.comprasModule.cancelPurchase('${p.id}')">Eliminar</button>
+                  </td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <!-- Banner de Alerta de Discrepancias de Conciliación si existen -->
         ${unconciliatedPurchases.length > 0 ? `
           <div class="bg-rose-50 border-2 border-rose-300 rounded-2xl p-5 shadow-sm space-y-3">
@@ -627,6 +649,38 @@ export const ComprasView = {
   // =========================================================================
   // MODAL INTERACTIVO: VER / EDITAR FACTURA & RECTIFICACIÓN CONTROLADA
   // =========================================================================
+  viewCentralPurchase(purchaseId) {
+    const purchase=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
+    if(!purchase){alert('No se encontró el comprobante en la base central.');return;}
+    const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const modal=document.getElementById('purchaseDetailModal');
+    const content=document.getElementById('purchaseDetailContent');
+    if(!modal||!content)return;
+    document.getElementById('purchaseDetailTitle').textContent='Comprobante '+(purchase.invoice_number||purchase.purchase_number);
+    content.innerHTML=`<div class="space-y-3">
+      <p><strong>Proveedor:</strong> ${escapeHtml(purchase.supplier_name)}</p>
+      <p><strong>Fecha:</strong> ${escapeHtml(purchase.date)} · <strong>Estado:</strong> ${escapeHtml(purchase.status)}</p>
+      <p><strong>Total:</strong> ${Formatter.money(purchase.total_final)}</p>
+      <div class="overflow-x-auto"><table class="w-full text-xs">
+        <thead><tr class="border-b"><th class="p-2 text-left">Código</th><th class="p-2 text-left">Producto</th><th class="p-2 text-right">Unidades</th><th class="p-2 text-right">Importe</th></tr></thead>
+        <tbody>${(purchase.items||[]).map(it=>`<tr class="border-b"><td class="p-2">${escapeHtml(it.code||it.sku)}</td><td class="p-2">${escapeHtml(it.product_name||it.commercial_name||it.invoice_description)}</td><td class="p-2 text-right">${escapeHtml(it.quantity_base??it.quantity??'—')}</td><td class="p-2 text-right">${Formatter.money(it.line_total??it.subtotal??0)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <p class="text-xs text-slate-500">Detalle de datos registrados. El documento PDF original solo se puede abrir cuando esté archivado.</p>
+    </div>`;
+    modal.classList.remove('hidden');
+  },
+
+  editCentralPurchase(purchaseId) {
+    this.viewCentralPurchase(purchaseId);
+    alert('La edición de una compra confirmada requiere una rectificación segura en Supabase. Todavía no está habilitada; no se modificó el stock.');
+  },
+
+  cancelPurchase(purchaseId) {
+    const purchase=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
+    if(!purchase)return;
+    alert('No se eliminó '+(purchase.invoice_number||purchase.purchase_number)+'. La anulación debe revertir movimientos en Supabase de forma transaccional y conservar la auditoría.');
+  },
+
   openEditInvoiceModal(purchaseId) {
     console.log('Abriendo modal de factura ID:', purchaseId);
     const purchases = db.getPurchases();
