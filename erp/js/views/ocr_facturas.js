@@ -1127,8 +1127,12 @@ export const OcrFacturasView = {
       return;
     }
     const {getAdminSession}=await import('../supabase_admin.js');
-    const token=getAdminSession()?.access_token || sessionStorage.getItem('stayclean_staff_access_token');
+    const token=getAdminSession()?.access_token;
     if(!token){notify('Ingresá como personal autorizado desde Ventas → Pedidos online.','error');return;}
+    const button=document.getElementById('btn-confirm-ocr-purchase');
+    if(this.confirmingPurchase)return;
+    this.confirmingPurchase=true;
+    if(button)button.disabled=true;
     try {
       const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
       const rpc=async(name,payload)=>{const r=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(payload)});const x=await r.json();if(!r.ok)throw Error(x.message||'Error de Supabase');return x;};
@@ -1174,13 +1178,22 @@ export const OcrFacturasView = {
       if(!items.length)throw Error('Factura sin productos válidos');
       const invoice=String(inv.invoice_number||'').trim();
       if(!invoice)throw Error('Número de factura requerido');
-      const id=crypto.randomUUID();
+      const identity=JSON.stringify([supplier.id,invoice.toUpperCase()]);
+      if(this.purchaseRequest?.identity!==identity)this.purchaseRequest={identity,id:crypto.randomUUID()};
+      const id=this.purchaseRequest.id;
       const message='Confirmar RECEPCIÓN CENTRAL de '+invoice+' ('+supplier.name+') con '+items.length+' productos y '+items.reduce((n,x)=>n+x.quantity_base,0)+' unidades base. Esta acción SUMA stock real y no se puede deshacer automáticamente.';
       if(!window.confirm(message))return;
       const result=await rpc('stayclean_staff_receive_purchase',{p_purchase:{request_id:id,supplier_id:supplier.id,invoice_number:invoice,notes:inv.notes||'',items}});
+      if(!result?.success)throw Error('Supabase no confirmó la recepción');
+      this.purchaseRequest=null;
       notify('Factura '+invoice+' recibida en Supabase. Stock central actualizado.','success');
-      this.extractedInvoice=null;if(window.app)window.app.navigate('compras');
-    }catch(err){console.error(err);notify('No se modificó el inventario: '+err.message,'error');}
+      this.extractedInvoice=null;
+      await window.comprasModule.reloadAfterPurchaseChange();
+    }catch(err){console.error(err);notify('No se pudo confirmar la recepción: '+err.message,'error');}
+    finally {
+      this.confirmingPurchase=false;
+      if(button)button.disabled=false;
+    }
   },
 
   loadAllTodayInvoicesBatch() {
