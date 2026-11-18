@@ -1126,7 +1126,8 @@ export const OcrFacturasView = {
       notify('SYS PED-7601 ya está registrado en Supabase con 64 unidades ingresadas. No se duplicó el stock.','info');
       return;
     }
-    const token=sessionStorage.getItem('stayclean_staff_access_token');
+    const {getAdminSession}=await import('../supabase_admin.js');
+    const token=getAdminSession()?.access_token || sessionStorage.getItem('stayclean_staff_access_token');
     if(!token){notify('Ingresá como personal autorizado desde Ventas → Pedidos online.','error');return;}
     try {
       const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
