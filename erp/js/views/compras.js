@@ -1,10 +1,14 @@
 import { db } from '../db.js';
 import { Formatter, PackagingEngine, LogisticsCostDistributor } from '../models.js';
 import { OcrFacturasView } from './ocr_facturas.js?v=10.3';
-let filterSupplierId = '';
+let filterSupplierId = 'ALL';
 let filterDateFrom = '';
 let filterDateTo = '';
 let filterSearchQuery = '';
+
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character =>
+  ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'})[character]);
+const attributeArgument = value => escapeHtml(JSON.stringify(String(value)));
 
 export const ComprasView = {
   render(container, params = {}) {
@@ -76,6 +80,7 @@ export const ComprasView = {
   },
 
   renderPurchasesList(container, purchases, suppliers = []) {
+    const central = Boolean(window.app?.centralReadOnly);
     const activeSuppliers = suppliers.length ? suppliers : db.getSuppliers();
     const activePurchases = purchases.filter(p => p.status !== 'ANULADA');
     const activeCount = activePurchases.length;
@@ -90,13 +95,13 @@ export const ComprasView = {
 
     // Aplicar filtros de Proveedor, Fecha y Búsqueda por Código/Descripción/Factura
     const filteredPurchases = purchases.filter(p => {
-      if (filterSupplierId !== 'ALL' && p.supplier_id !== filterSupplierId) {
+      if (filterSupplierId !== 'ALL' && String(p.supplier_id) !== String(filterSupplierId)) {
         return false;
       }
-      if (filterDateFrom && String(p.date || '') < filterDateFrom) {
+      if (filterDateFrom && String(p.date || '').slice(0, 10) < filterDateFrom) {
         return false;
       }
-      if (filterDateTo && String(p.date || '') > filterDateTo) {
+      if (filterDateTo && String(p.date || '').slice(0, 10) > filterDateTo) {
         return false;
       }
       if (filterSearchQuery.trim() !== '') {
@@ -111,7 +116,7 @@ export const ComprasView = {
         if (!inHeader && !inItems) return false;
       }
       return true;
-    });
+    }).sort((left, right) => String(right.date || '').localeCompare(String(left.date || '')));
 
     const totalConfirmed = filteredPurchases
       .filter(p => p.status !== 'ANULADA')
@@ -120,28 +125,6 @@ export const ComprasView = {
     container.innerHTML = `
       <div class="space-y-6 animate-fade-in">
         ${this.renderTopNavTabs('list', activeCount)}
-
-        <section class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-          <h2 class="font-extrabold text-slate-900 mb-3">Comprobantes registrados en Supabase</h2>
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left">
-              <thead><tr class="border-b text-slate-600"><th class="p-2">Fecha</th><th class="p-2">N.º comprobante</th><th class="p-2">Proveedor</th><th class="p-2 text-right">Total</th><th class="p-2">Acciones</th></tr></thead>
-              <tbody>
-                ${activePurchases.map(p=>`<tr class="border-b border-slate-100">
-                  <td class="p-2 whitespace-nowrap">${Formatter.date(p.date)}</td>
-                  <td class="p-2 font-mono font-semibold">${p.invoice_number||p.purchase_number}</td>
-                  <td class="p-2">${p.supplier_name||'-'}</td>
-                  <td class="p-2 text-right whitespace-nowrap font-semibold">${Formatter.money(p.total_final)}</td>
-                  <td class="p-2 whitespace-nowrap">
-                    <button type="button" class="px-2 py-1 rounded bg-blue-700 text-white" onclick="window.comprasModule.viewCentralPurchase('${p.id}')">Ver</button>
-                    <button type="button" class="px-2 py-1 rounded border border-blue-300" onclick="window.comprasModule.editCentralPurchase('${p.id}')">Editar</button>
-                    <button type="button" class="px-2 py-1 rounded border border-rose-300 text-rose-700" onclick="window.comprasModule.cancelPurchase('${p.id}')">Anular</button>
-                  </td>
-                </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
-        </section>
 
         <!-- Banner de Alerta de Discrepancias de Conciliación si existen -->
         ${unconciliatedPurchases.length > 0 ? `
@@ -160,16 +143,16 @@ export const ComprasView = {
                   </span>
                 </div>
                 <p class="text-xs text-rose-800 mt-1 leading-relaxed">
-                  El sistema detectó que el total declarado en la factura física difiere del total calculado por los renglones cargados. Podés abrir cada comprobante con <strong>"Ver / Editar"</strong> para corregir precios, empaques o descuentos y conciliar el valor exacto:
+                  El total declarado difiere de la suma de los renglones. Abrí el comprobante para revisar la diferencia.
                 </p>
                 <div class="flex flex-wrap items-center gap-2 mt-3">
                   ${unconciliatedPurchases.map(p => {
                     const stated = p.invoice_stated_total != null && p.invoice_stated_total !== '' ? Number(p.invoice_stated_total) : Number(p.total_final);
                     const diff = Number((stated - (Number(p.total_final) || 0)).toFixed(2));
                     return `
-                      <button onclick="window.comprasModule.openEditInvoiceModal('${p.id}')" class="px-3 py-1.5 bg-white hover:bg-rose-100 text-rose-950 rounded-xl text-xs font-bold border border-rose-300 shadow-sm flex items-center gap-2 transition">
-                        <span class="font-mono font-black text-blue-900">${p.invoice_number}</span>
-                        <span class="text-slate-600 truncate max-w-[140px]">${p.supplier_name}</span>
+                      <button onclick="window.comprasModule.${central ? 'viewCentralPurchase' : 'openEditInvoiceModal'}(${attributeArgument(p.id)})" class="px-3 py-1.5 bg-white hover:bg-rose-100 text-rose-950 rounded-xl text-xs font-bold border border-rose-300 shadow-sm flex items-center gap-2 transition">
+                        <span class="font-mono font-black text-blue-900">${escapeHtml(p.invoice_number)}</span>
+                        <span class="text-slate-600 truncate max-w-[140px]">${escapeHtml(p.supplier_name)}</span>
                         <span class="font-mono font-black text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded text-[10px]">
                           Dif: ${diff >= 0 ? '+' : ''}${Formatter.money(diff)}
                         </span>
@@ -193,11 +176,11 @@ export const ComprasView = {
                 Todos los Proveedores (${purchases.filter(p => p.status !== 'ANULADA').length})
               </button>
               ${activeSuppliers.map(s => {
-                const count = purchases.filter(p => p.status !== 'ANULADA' && p.supplier_id === s.id).length;
-                const active = filterSupplierId === s.id;
+                const count = purchases.filter(p => p.status !== 'ANULADA' && String(p.supplier_id) === String(s.id)).length;
+                const active = String(filterSupplierId) === String(s.id);
                 return `
-                  <button onclick="window.comprasModule.setSupplierFilter('${s.id}')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition border ${active ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 hover:bg-blue-50 text-slate-700 border-slate-200'}">
-                    ${s.name} <span class="ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${active ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}">${count}</span>
+                  <button onclick="window.comprasModule.setSupplierFilter(${attributeArgument(s.id)})" class="px-3 py-1.5 rounded-lg text-xs font-bold transition border ${active ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 hover:bg-blue-50 text-slate-700 border-slate-200'}">
+                    ${escapeHtml(s.name)} <span class="ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${active ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}">${count}</span>
                   </button>
                 `;
               }).join('')}
@@ -210,7 +193,7 @@ export const ComprasView = {
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar por N° Factura, Código o Descripción de Artículo</label>
               <div class="relative">
                 <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-                <input type="text" id="comprasSearchInput" value="${filterSearchQuery}" placeholder="Ej: 00014989, 98459, K0274, 2000085, Lavandina..." class="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                <input type="text" id="comprasSearchInput" value="${escapeHtml(filterSearchQuery)}" placeholder="Ej: 00014989, 98459, K0274, 2000085, Lavandina..." class="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none">
               </div>
             </div>
             <div class="md:col-span-2">
@@ -257,7 +240,7 @@ export const ComprasView = {
                   <tr>
                     <td colspan="11" class="py-12 px-4 text-center text-slate-500">
                       <div class="max-w-md mx-auto space-y-2">
-                        <p class="font-bold text-slate-700 text-sm">Todavía no hay facturas cargadas para este filtro.</p>
+                        <p class="font-bold text-slate-700 text-sm">${purchases.length ? 'No hay facturas que coincidan con los filtros.' : 'Todavía no hay facturas cargadas.'}</p>
                         <p class="text-xs text-slate-400">Hacé clic en <strong>"Subir / Leer Factura (OCR / PDF)"</strong> para cargar y verificar tus facturas de compra.</p>
                       </div>
                     </td>
@@ -271,12 +254,12 @@ export const ComprasView = {
                     <tr class="hover:bg-slate-50 transition">
                       <td class="py-3 px-4 font-bold text-slate-700 whitespace-nowrap">${Formatter.date(p.date)}</td>
                       <td class="py-3 px-4">
-                        <span class="font-mono font-black text-blue-900 block">${p.invoice_number}</span>
-                        <span class="text-[10px] font-mono text-slate-400">${p.purchase_number} · ${p.payment_condition || 'Contado'}</span>
+                        <span class="font-mono font-black text-blue-900 block">${escapeHtml(p.invoice_number)}</span>
+                        <span class="text-[10px] font-mono text-slate-400">${escapeHtml(p.purchase_number)} · ${escapeHtml(p.payment_condition || 'Contado')}</span>
                       </td>
                       <td class="py-3 px-4">
-                        <span class="font-extrabold text-slate-900 block">${p.supplier_name}</span>
-                        ${p.supplier_cuit ? `<span class="text-[10px] font-mono text-slate-500">CUIT: ${p.supplier_cuit}</span>` : ''}
+                        <span class="font-extrabold text-slate-900 block">${escapeHtml(p.supplier_name)}</span>
+                        ${p.supplier_cuit ? `<span class="text-[10px] font-mono text-slate-500">CUIT: ${escapeHtml(p.supplier_cuit)}</span>` : ''}
                       </td>
                       <td class="py-3 px-3 text-center">
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-extrabold bg-blue-50 text-blue-800 border border-blue-200">
@@ -285,7 +268,7 @@ export const ComprasView = {
                       </td>
                       <td class="py-3 px-3 text-right font-mono text-slate-700">${Formatter.money(p.subtotal_products)}</td>
                       <td class="py-3 px-3 text-right font-mono ${Number(p.discount_amount) > 0 ? 'text-amber-700 font-bold' : 'text-slate-400'}">
-                        ${Number(p.discount_amount) > 0 ? `- ${Formatter.money(p.discount_amount)} (${p.discount_pct || 0}%)` : '$ 0,00'}
+                        ${Number(p.discount_amount) > 0 ? `- ${Formatter.money(p.discount_amount)} (${escapeHtml(p.discount_pct || 0)}%)` : '$ 0,00'}
                       </td>
                       <td class="py-3 px-3 text-right font-mono text-slate-500">
                         ${Number(p.vat_amount) > 0 ? Formatter.money(p.vat_amount) : '<span class="text-[10px] text-slate-400">Incluido</span>'}
@@ -307,18 +290,18 @@ export const ComprasView = {
 
                       <td class="py-3 px-3 text-center">
                         <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${p.status === 'ANULADA' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
-                          ${p.status}
+                          ${escapeHtml(p.status)}
                         </span>
                       </td>
                       <td class="py-3 px-4 text-center whitespace-nowrap">
-                        <button onclick="window.comprasModule.viewCentralPurchase('${p.id}')" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-sm transition">
+                        <button onclick="window.comprasModule.viewCentralPurchase(${attributeArgument(p.id)})" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-sm transition">
                           <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                           Ver
                         </button>
                         ${p.status !== 'ANULADA' ? `
-                          <button onclick="window.comprasModule.editCentralPurchase('${p.id}')" class="px-2 py-1.5 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold ml-1">Editar</button>
-                          <button onclick="window.comprasModule.cancelPurchase('${p.id}')" title="Eliminar / anular compra (revierte stock)" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded ml-1 transition">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                          <button onclick="window.comprasModule.editCentralPurchase(${attributeArgument(p.id)})" class="px-2 py-1.5 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold ml-1">Editar</button>
+                          <button onclick="window.comprasModule.cancelPurchase(${attributeArgument(p.id)})" title="Eliminar / anular compra (revierte stock)" class="inline-flex items-center gap-1 px-2 py-1.5 text-rose-700 hover:bg-rose-50 rounded ml-1 transition">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Anular
                           </button>
                         ` : ''}
                       </td>
@@ -633,19 +616,6 @@ export const ComprasView = {
   // =========================================================================
   // MÉTODOS DE FILTRO Y ACCIONES DE FACTURA
   // =========================================================================
-  setSupplierFilter(sId) {
-    filterSupplierId = sId;
-    this.renderPurchasesList(document.getElementById('app-content'), db.getPurchases(), db.getSuppliers());
-  },
-
-  clearFilters() {
-    filterSupplierId = 'ALL';
-    filterDateFrom = '';
-    filterDateTo = '';
-    filterSearchQuery = '';
-    this.renderPurchasesList(document.getElementById('app-content'), db.getPurchases(), db.getSuppliers());
-  },
-
   // =========================================================================
   // MODAL INTERACTIVO: VER / EDITAR FACTURA & RECTIFICACIÓN CONTROLADA
   // =========================================================================
