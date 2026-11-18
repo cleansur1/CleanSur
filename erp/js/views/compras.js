@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { Formatter, PackagingEngine, LogisticsCostDistributor } from '../models.js';
-import { OcrFacturasView } from './ocr_facturas.js?v=10.0';
+import { OcrFacturasView } from './ocr_facturas.js?v=10.1';
 let filterSupplierId = '';
 let filterDateFrom = '';
 let filterDateTo = '';
