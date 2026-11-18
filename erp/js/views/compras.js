@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { Formatter, PackagingEngine, LogisticsCostDistributor } from '../models.js';
-import { OcrFacturasView } from './ocr_facturas.js?v=10.1';
+import { OcrFacturasView } from './ocr_facturas.js?v=10.2';
 let filterSupplierId = '';
 let filterDateFrom = '';
 let filterDateTo = '';
@@ -135,7 +135,7 @@ export const ComprasView = {
                   <td class="p-2 whitespace-nowrap">
                     <button type="button" class="px-2 py-1 rounded bg-blue-700 text-white" onclick="window.comprasModule.viewCentralPurchase('${p.id}')">Ver</button>
                     <button type="button" class="px-2 py-1 rounded border border-blue-300" onclick="window.comprasModule.editCentralPurchase('${p.id}')">Editar</button>
-                    <button type="button" class="px-2 py-1 rounded border border-rose-300 text-rose-700" onclick="window.comprasModule.cancelPurchase('${p.id}')">Eliminar</button>
+                    <button type="button" class="px-2 py-1 rounded border border-rose-300 text-rose-700" onclick="window.comprasModule.cancelPurchase('${p.id}')">Anular</button>
                   </td>
                 </tr>`).join('')}
               </tbody>
@@ -649,74 +649,6 @@ export const ComprasView = {
   // =========================================================================
   // MODAL INTERACTIVO: VER / EDITAR FACTURA & RECTIFICACIÓN CONTROLADA
   // =========================================================================
-  viewCentralPurchase(purchaseId) {
-    const purchase=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
-    if(!purchase){alert('No se encontró el comprobante en la base central.');return;}
-    const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-    const modal=document.getElementById('purchaseDetailModal');
-    const content=document.getElementById('purchaseDetailContent');
-    if(!modal||!content)return;
-    document.getElementById('purchaseDetailTitle').textContent='Comprobante '+(purchase.invoice_number||purchase.purchase_number);
-    content.innerHTML=`<div class="space-y-3">
-      <p><strong>Proveedor:</strong> ${escapeHtml(purchase.supplier_name)}</p>
-      <p><strong>Fecha:</strong> ${escapeHtml(purchase.date)} · <strong>Estado:</strong> ${escapeHtml(purchase.status)}</p>
-      <p><strong>Total:</strong> ${Formatter.money(purchase.total_final)}</p>
-      <div class="overflow-x-auto"><table class="w-full text-xs">
-        <thead><tr class="border-b"><th class="p-2 text-left">Código</th><th class="p-2 text-left">Producto</th><th class="p-2 text-right">Unidades</th><th class="p-2 text-right">Importe</th></tr></thead>
-        <tbody>${(purchase.items||[]).map(it=>`<tr class="border-b"><td class="p-2">${escapeHtml(it.code||it.sku)}</td><td class="p-2">${escapeHtml(it.product_name||it.commercial_name||it.invoice_description)}</td><td class="p-2 text-right">${escapeHtml(it.quantity_base??it.quantity??'—')}</td><td class="p-2 text-right">${Formatter.money(it.line_total??it.subtotal??0)}</td></tr>`).join('')}</tbody>
-      </table></div>
-      <p class="text-xs text-slate-500">Detalle de datos registrados. El documento PDF original solo se puede abrir cuando esté archivado.</p>
-    </div>`;
-    modal.classList.remove('hidden');
-  },
-
-  async runCentralPurchaseAction(purchaseId,action,changes) {
-    const {getAdminSession}=await import('../supabase_admin.js');
-    const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY}=await import('../supabase_public.js');
-    const session=getAdminSession();
-    if(!session?.access_token)throw new Error('Iniciá sesión como personal autorizado en Supabase');
-    const response=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/stayclean_staff_manage_purchase',{
-      method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},
-      body:JSON.stringify({p_purchase_id:purchaseId,p_action:action,p_changes:changes})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok||!data.ok)throw new Error(data.message||'No se pudo aplicar el cambio en Supabase');
-    // La lectura central debe actualizarse antes de mostrar un resultado confirmado.
-    // La vista central utiliza un snapshot de solo lectura. Recargar para volver
-    // a consultar Supabase, sin intentar escribir en IndexedDB ni localStorage.
-    window.location.reload();
-    return data;
-  },
-
-  async editCentralPurchase(purchaseId) {
-    const p=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
-    if(!p)return alert('Comprobante no encontrado');
-    const number=prompt('Número de comprobante:',p.invoice_number||'');
-    if(number===null)return;
-    const notes=prompt('Observaciones (opcional):',p.notes||'');
-    if(notes===null)return;
-    const reason=prompt('Motivo de la modificación (obligatorio):','');
-    if(reason===null)return;
-    if(!number.trim()||reason.trim().length<5)return alert('Ingresá número y motivo de al menos 5 caracteres');
-    try {
-      await this.runCentralPurchaseAction(purchaseId,'EDITAR_DATOS',{invoice_number:number.trim(),notes,reason:reason.trim()});
-      alert('Comprobante actualizado en Supabase. Las cantidades de stock no se modificaron.');
-    }catch(e){alert('No se guardó: '+e.message);}
-  },
-
-  async cancelPurchase(purchaseId) {
-    const p=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
-    if(!p)return alert('Comprobante no encontrado');
-    const reason=prompt('Motivo de anulación de '+p.invoice_number+' (se intentará revertir el stock):','');
-    if(reason===null)return;
-    if(reason.trim().length<8)return alert('Ingresá un motivo de al menos 8 caracteres');
-    if(!confirm('¿Confirmás ANULAR '+p.invoice_number+'? Se revertirán sus movimientos de stock si es seguro hacerlo. Esta operación queda registrada.'))return;
-    try{
-      await this.runCentralPurchaseAction(purchaseId,'ANULAR',{reason:reason.trim()});
-      alert('Compra anulada en Supabase y stock revertido. El registro permanece para auditoría.');
-    }catch(e){alert('No se anuló ni se modificó stock: '+e.message);}
-  },
-
   openEditInvoiceModal(purchaseId) {
     console.log('Abriendo modal de factura ID:', purchaseId);
     const purchases = db.getPurchases();
@@ -1411,11 +1343,23 @@ export const ComprasView = {
     const response=await fetch(base+'/rest/v1/rpc/stayclean_staff_manage_purchase',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_purchase_id:id,p_action:action,p_changes:changes})});
     const result=await response.json().catch(()=>({}));
     if(!response.ok)throw Error(result.message||'No se pudo guardar en Supabase');
+    return result;
+  },
+
+  async refreshCentralPurchases() {
     const {readCentral}=await import('../supabase_erp_adapter.js');
     const [purchases,products,movements]=await Promise.all(['purchases','products','inventory_movements'].map(t=>readCentral(t,{order:'id.asc',limit:10000})));
     db.centralSetTable('purchases',purchases);db.centralSetTable('products',products);db.centralSetTable('inventory_movements',movements);
-    this.render(document.getElementById('app-content'));
-    return result;
+    if (window.app?.currentRoute === 'compras') window.app.navigate('compras', {action:'list'});
+  },
+
+  async reloadAfterPurchaseChange() {
+    try {
+      await this.refreshCentralPurchases();
+    } catch (error) {
+      console.error('Cambio guardado. No se pudo actualizar la vista.', error);
+      alert('El cambio quedó guardado en Supabase. Volvé a ingresar para actualizar la vista.');
+    }
   },
 
   viewCentralPurchase(id) {
@@ -1423,6 +1367,7 @@ export const ComprasView = {
     if(!p)return alert('Comprobante no encontrado');
     const esc=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     const modal=document.createElement('div');
+    modal.id='centralPurchaseDetailModal';
     modal.className='fixed inset-0 z-[100] bg-slate-950/60 flex items-center justify-center p-4';
     modal.innerHTML=`<div class="bg-white rounded-xl shadow-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-auto">
       <div class="flex justify-between items-center mb-4"><h2 class="font-bold text-xl">Comprobante ${esc(p.invoice_number)}</h2><button class="close-purchase-detail text-xl" aria-label="Cerrar">✕</button></div>
@@ -1444,7 +1389,7 @@ export const ComprasView = {
     if(invoice===null)return;
     const reason=prompt('Motivo de la corrección (obligatorio, mínimo 5 caracteres):');
     if(reason===null)return;
-    try{await this.centralPurchaseRpc('EDITAR_DATOS',id,{invoice_number:invoice,reason});alert('Datos de comprobante actualizados en Supabase.');}
+    try{await this.centralPurchaseRpc('EDITAR_DATOS',id,{invoice_number:invoice,reason});await this.reloadAfterPurchaseChange();alert('Datos de comprobante actualizados en Supabase.');}
     catch(err){alert('No se pudo editar: '+err.message);}
   },
 
@@ -1457,7 +1402,8 @@ export const ComprasView = {
     if(!confirm('¿Eliminar/anular '+p.invoice_number+'? Se intentará revertir su stock y conservar el historial.'))return;
     const reason=prompt('Motivo de eliminación/anulación:');
     if(reason===null)return;
-    try{await this.centralPurchaseRpc('ANULAR',purchaseId,{reason});alert('Compra anulada en Supabase y stock revertido.');}
+    if(reason.trim().length<8)return alert('Ingresá un motivo de al menos 8 caracteres');
+    try{await this.centralPurchaseRpc('ANULAR',purchaseId,{reason});await this.reloadAfterPurchaseChange();alert('Compra anulada en Supabase y stock revertido.');}
     catch(err){alert('No se pudo anular: '+err.message);}
   }
 };
