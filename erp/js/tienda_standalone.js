@@ -11,11 +11,6 @@ const catalogVariantGroups = [
     label: 'Talle',
     choices: [['23006', 'M'], ['23007', 'L']],
   },
-  {
-    name: 'Desinfectante de piso SYS',
-    label: 'Volumen',
-    choices: [['2000107', '1 L'], ['2000086', '5 L']],
-  },
 ];
 
 class TiendaStandaloneApp {
