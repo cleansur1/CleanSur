@@ -9,98 +9,41 @@ let chartCategorias = null;
 let chartClientes = null;
 let chartRentabilidad = null;
 
-export const DashboardView = {
-  renderCentral(container) {
-    const data = window.app?.centralDashboard || {};
-    const fmt = value => new Intl.NumberFormat('es-AR').format(Number(value) || 0);
-    const money = value => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(value) || 0);
-    const products = db.getProducts() || [];
-    const low = products.filter(p => Number(p.current_stock) > 0 && Number(p.current_stock) <= Number(p.min_stock || 0));
-    const out = products.filter(p => Number(p.current_stock) <= 0);
-    const inventorySale = products.reduce((sum,p)=>sum+Math.max(0,Number(p.current_stock)||0)*(Number(p.sale_price)||0),0);
-    const tiles = [
-      {label:'Ventas registradas',value:money(data.sales_total),detail:fmt(data.sales)+' operaciones',icon:'trending-up',tone:'emerald'},
-      {label:'Compras registradas',value:money(data.purchases_total),detail:fmt(data.purchases)+' compras',icon:'package-check',tone:'blue'},
-      {label:'Stock valorizado (costo)',value:money(data.stock_value),detail:'Valor de inventario',icon:'warehouse',tone:'cyan'},
-      {label:'Stock valorizado (venta)',value:money(inventorySale),detail:'Valor potencial, no utilidad',icon:'badge-dollar-sign',tone:'indigo'},
-      {label:'Productos',value:fmt(data.products),detail:fmt(data.stock)+' unidades en stock',icon:'package',tone:'blue'},
-      {label:'Pedidos',value:fmt(data.orders),detail:'Pedidos registrados',icon:'clipboard-list',tone:'amber'}
-    ];
-    const secondary = [
-      {label:'Clientes',value:fmt(data.customers),icon:'users'},
-      {label:'Unidades disponibles',value:fmt(data.stock),icon:'boxes'},
-      {label:'Productos con stock bajo',value:fmt(low.length),icon:'alert-triangle'},
-      {label:'Productos sin stock',value:fmt(out.length),icon:'package-x'}
-    ];
-    container.innerHTML = `
-      <div class="space-y-6 animate-fade-in">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#8FD0F4]/40 shadow-sm">
-          <div>
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#E9F4FB] text-[#0E3A6B] border border-[#8FD0F4]">CleanSur · Caviahue y Copahue</span>
-            <h1 class="text-2xl font-black text-[#0E3A6B] tracking-tight mt-2">Panel de Control & Indicadores</h1>
-            <p class="text-xs text-slate-500 mt-1">Resumen general de operaciones e inventario centralizado en Supabase.</p>
-          </div>
-          <span class="text-xs font-semibold px-3 py-2 rounded-lg bg-[#E9F4FB] text-[#0E3A6B]">Datos centrales · Totales acumulados</span>
-        </div>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-          ${tiles.map(t=>`<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition min-w-0">
-            <div class="flex items-center justify-between text-slate-500 mb-2 gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-wide">${t.label}</span>
-              <div class="w-8 h-8 shrink-0 rounded-lg bg-${t.tone}-50 text-${t.tone}-600 flex items-center justify-center"><i data-lucide="${t.icon}" class="w-4 h-4"></i></div>
-            </div>
-            <div class="text-lg xl:text-xl font-bold text-slate-800 break-words">${t.value}</div>
-            <div class="text-[11px] text-slate-500 mt-1">${t.detail}</div>
-          </div>`).join('')}
-        </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-          ${secondary.map(t=>`<div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center gap-3">
-            <div class="w-10 h-10 shrink-0 rounded-lg bg-[#E9F4FB] text-[#0E3A6B] flex items-center justify-center"><i data-lucide="${t.icon}" class="w-5 h-5"></i></div>
-            <div><div class="text-xs text-slate-500 font-medium">${t.label}</div><div class="text-base font-bold text-slate-800">${t.value}</div></div>
-          </div>`).join('')}
-        </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2"><i data-lucide="bell-ring" class="w-5 h-5 text-amber-600"></i><h2 class="text-base font-bold text-slate-800">Panel de Alertas y Atención Inmediata</h2></div>
-            <span class="text-xs px-2.5 py-1 bg-amber-50 text-amber-700 font-semibold rounded-full border border-amber-200">${fmt(low.length+out.length)} alertas de stock</span>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div class="p-4 rounded-lg border border-amber-200 bg-amber-50/50"><div class="text-xs text-amber-800 font-semibold">Stock bajo</div><div class="text-2xl font-bold text-amber-700 mt-2">${fmt(low.length)}</div><div class="text-xs text-slate-500 mt-1">Productos bajo el mínimo configurado</div></div>
-            <div class="p-4 rounded-lg border border-rose-200 bg-rose-50/50"><div class="text-xs text-rose-800 font-semibold">Sin stock</div><div class="text-2xl font-bold text-rose-700 mt-2">${fmt(out.length)}</div><div class="text-xs text-slate-500 mt-1">Productos sin unidades disponibles</div></div>
-            <div class="p-4 rounded-lg border border-blue-200 bg-blue-50/50"><div class="text-xs text-blue-800 font-semibold">Inventario</div><div class="text-2xl font-bold text-blue-700 mt-2">${fmt(data.stock)}</div><div class="text-xs text-slate-500 mt-1">Unidades registradas en Supabase</div></div>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h2 class="text-base font-bold text-slate-800 mb-3">Resumen comercial</h2>
-            <div class="divide-y divide-slate-100 text-sm">
-              <div class="flex justify-between py-3"><span class="text-slate-500">Ventas acumuladas</span><strong>${money(data.sales_total)}</strong></div>
-              <div class="flex justify-between py-3"><span class="text-slate-500">Compras acumuladas</span><strong>${money(data.purchases_total)}</strong></div>
-              <div class="flex justify-between py-3"><span class="text-slate-500">Clientes registrados</span><strong>${fmt(data.customers)}</strong></div>
-            </div>
-          </div>
-          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h2 class="text-base font-bold text-slate-800 mb-3">Resumen de inventario</h2>
-            <div class="divide-y divide-slate-100 text-sm">
-              <div class="flex justify-between py-3"><span class="text-slate-500">Productos registrados</span><strong>${fmt(data.products)}</strong></div>
-              <div class="flex justify-between py-3"><span class="text-slate-500">Stock a costo</span><strong>${money(data.stock_value)}</strong></div>
-              <div class="flex justify-between py-3"><span class="text-slate-500">Stock a precio de venta</span><strong>${money(inventorySale)}</strong></div>
-            </div>
-          </div>
-        </div>
-        <p class="text-xs text-slate-500">Los indicadores son acumulados, no corresponden exclusivamente al mes actual. Los márgenes, resultados y gráficos históricos se reincorporarán cuando sus cálculos estén validados contra Supabase.</p>
-      </div>`;
-    if (window.lucide) window.lucide.createIcons();
-  },
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character =>
+  ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'})[character]);
 
+export const DashboardView = {
   render(container) {
-    if (window.app?.centralReadOnly) {
-      this.renderCentral(container);
-      return;
-    }
-    const metrics = db.getDashboardMetrics() || {};
+    const central = window.app?.centralReadOnly && window.app.centralDashboard;
     const products = db.getProducts() || [];
-    const sales = (db.getSales() || []).filter(s => s.status === 'COMPLETADA');
-    const customers = db.getCustomers() || [];
+    const sales = (db.getSales() || []).filter(s => s.status === 'COMPLETADA')
+      .sort((left, right) => String(right.date).localeCompare(String(left.date)));
+    const metrics = db.getDashboardMetrics();
+    if (central) {
+      const totalCMV = sales.reduce((sum, sale) => sum + (Number(sale.total_cost) || 0), 0);
+      const totalExpenses = db.getExpenses().reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0);
+      const totalSales = Number(central.sales_total) || 0;
+      const grossMargin = totalSales - totalCMV;
+      const stockValuedSale = products.reduce((sum, product) =>
+        sum + Math.max(0, Number(product.current_stock) || 0) * (Number(product.sale_price) || 0), 0);
+      Object.assign(metrics, {
+        totalSales,
+        totalCMV,
+        grossMargin,
+        grossMarginPct: totalSales > 0 ? grossMargin / totalSales * 100 : 0,
+        totalExpenses,
+        estimatedResult: grossMargin - totalExpenses,
+        stockValuedCost: Number(central.stock_value) || 0,
+        stockValuedSale,
+        potentialGain: stockValuedSale - (Number(central.stock_value) || 0),
+        totalPurchases: Number(central.purchases_total) || 0,
+        accountsReceivable: db.getCustomers().reduce((sum, customer) => sum + (Number(customer.current_balance) || 0), 0),
+        orderCount: Number(central.sales) || 0,
+        avgTicket: Number(central.sales) > 0 ? totalSales / Number(central.sales) : 0,
+        lowStockProducts: products.filter(product => Number(product.current_stock) > 0 && Number(product.current_stock) <= Number(product.min_stock || 0)),
+        outOfStockProducts: products.filter(product => Number(product.current_stock) <= 0)
+      });
+    }
 
     container.innerHTML = `
       <div class="space-y-6 animate-fade-in">
@@ -109,27 +52,21 @@ export const DashboardView = {
           <div>
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#E9F4FB] text-[#0E3A6B] border border-[#8FD0F4]">
-                <i data-lucide="mountain-snow" class="w-3.5 h-3.5 mr-1 inline text-[#4EA1DD]"></i> StayClean • Caviahue, Neuquén
+                <i data-lucide="mountain-snow" class="w-3.5 h-3.5 mr-1 inline text-[#4EA1DD]"></i> CleanSur • Caviahue, Neuquén
               </span>
-              <span class="text-xs text-slate-500 font-medium">Temporada Invierno Activa</span>
+              
             </div>
             <h1 class="text-2xl font-black text-[#0E3A6B] tracking-tight mt-1">Panel de Control & Indicadores</h1>
-            <p class="text-xs text-slate-500">Distribuidora StayClean — Insumos de limpieza, químicos, papel y descartables gastronómicos.</p>
+            <p class="text-xs text-slate-500">Distribuidora CleanSur — Insumos de limpieza, químicos, papel y descartables gastronómicos.</p>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <div class="inline-flex rounded-lg border border-slate-300 p-1 bg-slate-50 text-xs font-semibold">
-              <button class="px-3 py-1.5 rounded-md bg-[#0E3A6B] text-white shadow-xs">Mes Actual</button>
-              <button class="px-3 py-1.5 text-slate-600 hover:text-slate-900">Esta Semana</button>
-              <button class="px-3 py-1.5 text-slate-600 hover:text-slate-900">Hoy</button>
-              <button class="px-3 py-1.5 text-slate-600 hover:text-slate-900">Año</button>
-            </div>
-            
+            <span class="px-3 py-1.5 text-xs font-semibold rounded-md bg-[#E9F4FB] text-[#0E3A6B]">Datos acumulados</span>
             <button onclick="window.app.navigate('ventas', { action: 'new' })" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0E3A6B] hover:bg-[#4EA1DD] text-white rounded-lg text-xs font-bold shadow-sm transition">
               <i data-lucide="shopping-cart" class="w-4 h-4 text-[#8FD0F4]"></i>
               + Nueva Venta
             </button>
-            <button onclick="window.app.navigate('compras', { action: 'new' })" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#4EA1DD] hover:bg-[#0E3A6B] text-white rounded-lg text-xs font-bold shadow-sm transition">
+            <button onclick="window.app.navigate('compras', { action: '${central ? 'ocr' : 'new'}' })" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#4EA1DD] hover:bg-[#0E3A6B] text-white rounded-lg text-xs font-bold shadow-sm transition">
               <i data-lucide="truck" class="w-4 h-4"></i>
               + Nueva Compra
             </button>
@@ -141,7 +78,7 @@ export const DashboardView = {
           <!-- Ventas Mes -->
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
             <div class="flex items-center justify-between text-slate-500 mb-1">
-              <span class="text-xs font-medium uppercase tracking-wider">Ventas del Mes</span>
+              <span class="text-xs font-medium uppercase tracking-wider">Ventas registradas</span>
               <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
                 <i data-lucide="trending-up" class="w-4 h-4"></i>
               </div>
@@ -221,13 +158,13 @@ export const DashboardView = {
 
         <!-- Tarjetas KPI Secundarias (Fila 2) -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-          <!-- Compras del Mes -->
+          <!-- Compras registradas -->
           <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
               <i data-lucide="package-check" class="w-5 h-5"></i>
             </div>
             <div>
-              <div class="text-xs text-slate-500 font-medium">Compras del Mes</div>
+              <div class="text-xs text-slate-500 font-medium">Compras registradas</div>
               <div class="text-base font-bold text-slate-800">${Formatter.money(metrics.totalPurchases)}</div>
             </div>
           </div>
@@ -289,8 +226,8 @@ export const DashboardView = {
               <div class="mt-2.5 space-y-1 max-h-24 overflow-y-auto text-[11px]">
                 ${metrics.lowStockProducts.map(p => `
                   <div class="flex items-center justify-between text-slate-700 hover:text-slate-900">
-                    <span class="truncate max-w-[150px] font-medium">${p.name}</span>
-                    <span class="text-rose-600 font-bold">${p.current_stock} ${p.sale_unit}</span>
+                    <span class="truncate max-w-[150px] font-medium">${escapeHtml(p.name)}</span>
+                    <span class="text-rose-600 font-bold">${escapeHtml(p.current_stock)} ${escapeHtml(p.sale_unit)}</span>
                   </div>
                 `).join('') || '<span class="text-slate-400 italic">Sin alertas de stock bajo</span>'}
               </div>
@@ -305,7 +242,7 @@ export const DashboardView = {
               <p class="text-xs text-slate-600 mt-1">Productos agotados que requieren reposición urgente.</p>
               <div class="mt-2.5 space-y-1 max-h-24 overflow-y-auto text-[11px]">
                 ${metrics.outOfStockProducts.length > 0 ? metrics.outOfStockProducts.map(p => `
-                  <div class="text-rose-700 font-medium truncate">${p.name}</div>
+                  <div class="text-rose-700 font-medium truncate">${escapeHtml(p.name)}</div>
                 `).join('') : '<span class="text-emerald-600 font-medium">✓ Todos los productos tienen stock</span>'}
               </div>
             </div>
@@ -320,7 +257,7 @@ export const DashboardView = {
               <div class="mt-2.5 space-y-1 max-h-24 overflow-y-auto text-[11px]">
                 ${metrics.overdueReceivables.map(c => `
                   <div class="flex items-center justify-between text-slate-700">
-                    <span class="truncate max-w-[140px]">${c.name}</span>
+                    <span class="truncate max-w-[140px]">${escapeHtml(c.name)}</span>
                     <span class="font-bold text-indigo-700">${Formatter.money(c.current_balance)}</span>
                   </div>
                 `).join('') || '<span class="text-slate-400 italic">No hay cuentas pendientes</span>'}
@@ -337,7 +274,7 @@ export const DashboardView = {
               <div class="mt-2.5 space-y-1 max-h-24 overflow-y-auto text-[11px]">
                 ${metrics.lowMarginProducts.map(p => `
                   <div class="flex items-center justify-between text-slate-700">
-                    <span class="truncate max-w-[140px]">${p.name}</span>
+                    <span class="truncate max-w-[140px]">${escapeHtml(p.name)}</span>
                     <span class="text-amber-600 font-bold">${Formatter.percent(p.margin_pct)}</span>
                   </div>
                 `).join('') || '<span class="text-slate-400 italic">Márgenes óptimos</span>'}
@@ -355,7 +292,7 @@ export const DashboardView = {
                 <h3 class="text-sm font-bold text-slate-800">Evolución de Ventas vs Costo (CMV)</h3>
                 <p class="text-xs text-slate-500">Comportamiento diario de ingresos y costo de mercadería vendida</p>
               </div>
-              <span class="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Septiembre 2026</span>
+              <span class="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Histórico</span>
             </div>
             <div class="h-64">
               <canvas id="chartVentasDia"></canvas>
@@ -392,8 +329,8 @@ export const DashboardView = {
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div class="flex items-center justify-between mb-4">
               <div>
-                <h3 class="text-sm font-bold text-slate-800">Evolución de Rentabilidad y Compras</h3>
-                <p class="text-xs text-slate-500">Comparativa mensual de compras, ventas y margen bruto</p>
+                <h3 class="text-sm font-bold text-slate-800">Evolución de Rentabilidad</h3>
+                <p class="text-xs text-slate-500">Comparativa mensual de ventas, margen bruto y gastos</p>
               </div>
             </div>
             <div class="h-64">
@@ -430,16 +367,16 @@ export const DashboardView = {
               <tbody class="divide-y divide-slate-100">
                 ${sales.slice(0, 5).map(s => `
                   <tr class="hover:bg-slate-50 transition">
-                    <td class="py-2.5 px-4 font-mono font-bold text-slate-800">${s.sale_number}</td>
+                    <td class="py-2.5 px-4 font-mono font-bold text-slate-800">${escapeHtml(s.sale_number)}</td>
                     <td class="py-2.5 px-4 text-slate-600">${Formatter.date(s.date)}</td>
-                    <td class="py-2.5 px-4 font-medium text-slate-800">${s.customer_name}</td>
-                    <td class="py-2.5 px-4 text-slate-600">${s.payment_method}</td>
+                    <td class="py-2.5 px-4 font-medium text-slate-800">${escapeHtml(s.customer_name)}</td>
+                    <td class="py-2.5 px-4 text-slate-600">${escapeHtml(s.payment_method)}</td>
                     <td class="py-2.5 px-4 text-right font-bold text-slate-800">${Formatter.money(s.total)}</td>
                     <td class="py-2.5 px-4 text-right font-semibold text-emerald-600">${Formatter.money(s.gross_margin)}</td>
                     <td class="py-2.5 px-4 text-right font-medium text-emerald-700">${Formatter.percent(s.gross_margin_pct)}</td>
                     <td class="py-2.5 px-4 text-center">
                       <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${s.status === 'COMPLETADA' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
-                        ${s.status}
+                        ${escapeHtml(s.status)}
                       </span>
                     </td>
                   </tr>
@@ -486,10 +423,10 @@ export const DashboardView = {
         } else {
           const byDate = {};
           completedSales.forEach(s => {
-            const d = (s.date || '').substring(5);
+            const d = (s.date || '').substring(0, 10);
             if (!byDate[d]) byDate[d] = { sales: 0, cost: 0 };
-            byDate[d].sales += (s.total || 0);
-            byDate[d].cost += (s.total_cost || 0);
+            byDate[d].sales += (Number(s.total) || 0);
+            byDate[d].cost += (Number(s.total_cost) || 0);
           });
           dates = Object.keys(byDate).sort();
           salesAmounts = dates.map(d => byDate[d].sales);
@@ -554,7 +491,7 @@ export const DashboardView = {
               const prod = (products || []).find(p => p.id === it.product_id);
               const cat = (categories || []).find(c => c.id === prod?.category_id);
               const catName = cat ? cat.name : 'Varios';
-              byCat[catName] = (byCat[catName] || 0) + (it.subtotal || 0);
+              byCat[catName] = (byCat[catName] || 0) + (Number(it.subtotal) || 0);
             });
           });
           catLabels = Object.keys(byCat);
@@ -606,7 +543,7 @@ export const DashboardView = {
           completedSales.forEach(s => {
             const cust = customers.find(c => c.id === s.customer_id);
             const type = cust ? cust.customer_type : (s.customer_name || 'Venta Mostrador');
-            byType[type] = (byType[type] || 0) + (s.total || 0);
+            byType[type] = (byType[type] || 0) + (Number(s.total) || 0);
           });
           cliLabels = Object.keys(byType);
           cliData = cliLabels.map(t => byType[t]);
@@ -659,13 +596,13 @@ export const DashboardView = {
           completedSales.forEach(s => {
             const m = (s.date || '').substring(0, 7);
             if (!byMonth[m]) byMonth[m] = { sales: 0, margin: 0, expenses: 0 };
-            byMonth[m].sales += (s.total || 0);
-            byMonth[m].margin += (s.gross_margin || (s.total - s.total_cost) || 0);
+            byMonth[m].sales += (Number(s.total) || 0);
+            byMonth[m].margin += (Number(s.gross_margin ?? (s.total - s.total_cost)) || 0);
           });
           expenses.forEach(e => {
             const m = (e.date || '').substring(0, 7);
             if (!byMonth[m]) byMonth[m] = { sales: 0, margin: 0, expenses: 0 };
-            byMonth[m].expenses += (e.amount || 0);
+            byMonth[m].expenses += (Number(e.amount) || 0);
           });
           rentLabels = Object.keys(byMonth).sort();
           rentVentas = rentLabels.map(m => byMonth[m].sales);
