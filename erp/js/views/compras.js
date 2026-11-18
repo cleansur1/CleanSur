@@ -232,7 +232,7 @@ export const ComprasView = {
                   <th class="py-3 px-4 text-right">Total Factura</th>
                   <th class="py-3 px-3 text-center">Conciliación</th>
                   <th class="py-3 px-3 text-center">Estado</th>
-                  <th class="py-3 px-4 text-center">Acciones</th>
+                  <th class="sticky right-0 z-10 bg-slate-800 py-3 px-4 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
@@ -251,7 +251,7 @@ export const ComprasView = {
                   const isConciliated = (!p.reconciliation || p.reconciliation.status === 'CONCILIADA') && Math.abs(diff) <= 0.05;
 
                   return `
-                    <tr class="hover:bg-slate-50 transition">
+                    <tr class="group hover:bg-slate-50 transition">
                       <td class="py-3 px-4 font-bold text-slate-700 whitespace-nowrap">${Formatter.date(p.date)}</td>
                       <td class="py-3 px-4">
                         <span class="font-mono font-black text-blue-900 block">${escapeHtml(p.invoice_number)}</span>
@@ -293,17 +293,19 @@ export const ComprasView = {
                           ${escapeHtml(p.status)}
                         </span>
                       </td>
-                      <td class="py-3 px-4 text-center whitespace-nowrap">
-                        <button onclick="window.comprasModule.viewCentralPurchase(${attributeArgument(p.id)})" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-sm transition">
+                      <td class="sticky right-0 border-l border-slate-200 bg-white px-3 py-3 text-center whitespace-nowrap group-hover:bg-slate-50">
+                        <div class="flex items-center justify-center gap-1">
+                        <button type="button" onclick="window.comprasModule.viewCentralPurchase(${attributeArgument(p.id)})" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-sm transition">
                           <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                           Ver
                         </button>
                         ${p.status !== 'ANULADA' ? `
-                          <button onclick="window.comprasModule.editCentralPurchase(${attributeArgument(p.id)})" class="px-2 py-1.5 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold ml-1">Editar</button>
-                          <button onclick="window.comprasModule.cancelPurchase(${attributeArgument(p.id)})" title="Eliminar / anular compra (revierte stock)" class="inline-flex items-center gap-1 px-2 py-1.5 text-rose-700 hover:bg-rose-50 rounded ml-1 transition">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i> Anular
+                          <button type="button" onclick="window.comprasModule.editCentralPurchase(${attributeArgument(p.id)})" class="px-2 py-1.5 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold ml-1">Editar</button>
+                          <button type="button" onclick="window.comprasModule.cancelPurchase(${attributeArgument(p.id)})" title="Anula la factura y revierte el stock cuando corresponde" class="inline-flex items-center gap-1 px-2 py-1.5 text-rose-700 hover:bg-rose-50 rounded ml-1 transition">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Eliminar
                           </button>
                         ` : ''}
+                        </div>
                       </td>
                     </tr>
                   `;
