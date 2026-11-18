@@ -682,10 +682,9 @@ export const ComprasView = {
     const data=await response.json().catch(()=>({}));
     if(!response.ok||!data.ok)throw new Error(data.message||'No se pudo aplicar el cambio en Supabase');
     // La lectura central debe actualizarse antes de mostrar un resultado confirmado.
-    const {readCentral}=await import('../supabase_erp_adapter.js');
-    const purchases=await readCentral('purchases',{order:'created_at.desc',limit:500});
-    db.setTable('purchases',purchases);
-    this.renderPurchasesList(document.getElementById('app-content'),purchases,db.getSuppliers());
+    // La vista central utiliza un snapshot de solo lectura. Recargar para volver
+    // a consultar Supabase, sin intentar escribir en IndexedDB ni localStorage.
+    window.location.reload();
     return data;
   },
 
