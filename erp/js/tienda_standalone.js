@@ -4,6 +4,20 @@ import { db } from './db.js';
 import { Formatter } from './models.js';
 import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js';
 
+// Group only verified provider SKUs. Cart and checkout keep the original product IDs.
+const catalogVariantGroups = [
+  {
+    name: 'Guantes de nitrilo negros EFA',
+    label: 'Talle',
+    choices: [['23006', 'M'], ['23007', 'L']],
+  },
+  {
+    name: 'Desinfectante de piso SYS',
+    label: 'Volumen',
+    choices: [['2000107', '1 L'], ['2000086', '5 L']],
+  },
+];
+
 class TiendaStandaloneApp {
   constructor() {
     this.products = [];
@@ -264,6 +278,24 @@ class TiendaStandaloneApp {
       list.sort((a, b) => b.discount_pct - a.discount_pct);
     }
 
+    for (const group of catalogVariantGroups) {
+      const choices = group.choices.flatMap(([sku, label]) => {
+        const product = this.products.find(item => item.sku === sku);
+        return product ? [{ product, label }] : [];
+      });
+      if (choices.length < 2) continue;
+      const groupIds = new Set(choices.map(({ product }) => product.id));
+      const index = list.findIndex(product => groupIds.has(product.id));
+      if (index < 0) continue;
+      const representative = list.find(product => groupIds.has(product.id) && product.in_stock) ?? list[index];
+      list = list.filter(product => !groupIds.has(product.id));
+      list.splice(index, 0, {
+        ...representative,
+        name: group.name,
+        has_options: true,
+        presentation: choices.map(({ label }) => label).join(' · '),
+      });
+    }
     this.renderProductsGrid(list);
   }
 
@@ -384,13 +416,29 @@ class TiendaStandaloneApp {
   // ==========================================
   // MODAL VISTA RÁPIDA / OPCIONES
   // ==========================================
-  openProductModal(productId) {
+  openProductModal(productId, keepQuantity = false) {
     const p = this.products.find(item => item.id === productId);
     if (!p) return;
 
     const modal = document.getElementById('productDetailModal');
     const content = document.getElementById('productDetailContent');
     if (!modal || !content) return;
+
+    const group = catalogVariantGroups.find(item => item.choices.some(([sku]) => sku === p.sku));
+    const choices = (group?.choices ?? []).flatMap(([sku, label]) => {
+      const product = this.products.find(item => item.sku === sku);
+      return product ? [{ product, label }] : [];
+    });
+    const variantSelector = choices.length > 1 ? `
+      <label for="modalVariant" class="block text-xs font-bold text-slate-700">${group.label}</label>
+      <select id="modalVariant" class="w-full rounded-lg border border-slate-300 p-2 text-sm">
+        ${choices.map(({ product, label }, index) => `
+          <option value="${index}" ${product.id === p.id ? 'selected' : ''}>
+            ${label}${product.in_stock ? '' : ' · Agotado'}
+          </option>`).join('')}
+      </select>` : '';
+    const previousQuantity = keepQuantity ? Number(content.querySelector('#modalProductQty')?.value) : 1;
+    const quantity = Math.max(1, Math.min(previousQuantity || 1, p.current_stock || 1));
 
     content.innerHTML = `
       <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-[#0E3A6B] text-white">
@@ -430,6 +478,7 @@ class TiendaStandaloneApp {
 
         <!-- Selector de Presentación / Variantes -->
         <div class="space-y-2 border-t border-slate-100 pt-4">
+          ${variantSelector}
           <label class="block text-xs font-bold text-slate-700">Presentación / Formato:</label>
           <div class="grid grid-cols-2 gap-2 text-xs">
             <label class="border-2 border-[#0E3A6B] bg-blue-50/50 p-3 rounded-lg cursor-pointer flex flex-col justify-between">
@@ -453,7 +502,7 @@ class TiendaStandaloneApp {
         <div class="flex items-center gap-3 border-t border-slate-100 pt-4">
           <div class="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
             <button onclick="window.tiendaApp.stepModalQty(-1)" class="px-3 py-2 text-slate-600 hover:bg-slate-200 font-bold text-sm">-</button>
-            <input type="number" id="modalProductQty" value="1" min="1" max="${p.current_stock || 100}" class="w-12 text-center text-xs font-bold bg-transparent outline-none">
+            <input type="number" id="modalProductQty" value="${quantity}" min="1" max="${p.current_stock || 1}" class="w-12 text-center text-xs font-bold bg-transparent outline-none">
             <button onclick="window.tiendaApp.stepModalQty(1)" class="px-3 py-2 text-slate-600 hover:bg-slate-200 font-bold text-sm">+</button>
           </div>
 
@@ -465,6 +514,13 @@ class TiendaStandaloneApp {
       </div>
     `;
 
+    content.querySelector('#modalVariant')?.addEventListener('change', event => {
+      const choice = choices[Number(event.target.value)];
+      if (choice) {
+        this.openProductModal(choice.product.id, true);
+        content.querySelector('#modalVariant')?.focus();
+      }
+    });
     modal.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons();
   }
