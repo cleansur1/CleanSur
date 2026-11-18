@@ -3,6 +3,7 @@
 // crea o reconoce proveedores sin duplicar, crea o actualiza productos por código/descripción,
 // acumula el stock cuando se repite un código y publica automáticamente en Tienda Nube.
 
+import { getAdminSession, signInAdmin } from '../supabase_admin.js';
 import { db } from '../db.js?v=6.0';
 import { Formatter, PackagingEngine } from '../models.js?v=6.0';
 
@@ -695,30 +696,33 @@ export const OcrFacturasView = {
   },
 
   bindEvents() {
-    const loginForm=document.getElementById('ocr-staff-login');
-    if(loginForm) {
-      const status=document.getElementById('ocr-staff-status');
-      status.textContent=sessionStorage.getItem('stayclean_staff_access_token')?'Sesión vinculada; se verificará al confirmar.':'Sin sesión de Supabase';
-      loginForm.addEventListener('submit',async e=>{
-        e.preventDefault();
-        const email=document.getElementById('ocr-staff-email').value.trim();
-        const password=document.getElementById('ocr-staff-password').value;
-        const button=loginForm.querySelector('button[type="submit"]');
-        button.disabled=true;status.textContent='Verificando permisos...';
-        try {
-          const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
-          const res=await fetch(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
-          const session=await res.json();
-          if(!res.ok||!session.access_token)throw Error(session.error_description||session.msg||'Credenciales inválidas');
-          const check=await fetch(base+'/rest/v1/rpc/stayclean_staff_purchase_lookup',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:'{}'});
-          const staff=await check.json();
-          if(!check.ok||!staff?.products||!staff?.suppliers)throw Error('Esta cuenta no tiene permisos de personal en Supabase');
-          sessionStorage.setItem('stayclean_staff_access_token',session.access_token);
-          status.textContent='Personal autorizado: conexión lista para recibir compras.';
-          document.getElementById('ocr-staff-password').value='';
-        }catch(err){sessionStorage.removeItem('stayclean_staff_access_token');status.textContent='Error: '+err.message;}
-        finally{button.disabled=false;}
-      });
+    const loginForm = document.getElementById('ocr-staff-login');
+    if (loginForm) {
+      const status = document.getElementById('ocr-staff-status');
+      if (getAdminSession()?.access_token) {
+        loginForm.classList.add('hidden');
+        status.textContent = 'Sesión de personal activa.';
+      } else {
+        status.textContent = 'Sin sesión de Supabase';
+        loginForm.addEventListener('submit', async event => {
+          event.preventDefault();
+          const email = document.getElementById('ocr-staff-email');
+          const password = document.getElementById('ocr-staff-password');
+          const button = loginForm.querySelector('button[type="submit"]');
+          button.disabled = true;
+          status.textContent = 'Verificando permisos…';
+          try {
+            await signInAdmin(email.value.trim(), password.value);
+            loginForm.classList.add('hidden');
+            status.textContent = 'Sesión de personal activa.';
+          } catch (error) {
+            status.textContent = 'Error: ' + error.message;
+          } finally {
+            password.value = '';
+            button.disabled = false;
+          }
+        });
+      }
     }
     const dropzone = document.getElementById('ocr-dropzone');
     const fileInput = document.getElementById('ocr-file-input');
@@ -1126,7 +1130,6 @@ export const OcrFacturasView = {
       notify('SYS PED-7601 ya está registrado en Supabase con 64 unidades ingresadas. No se duplicó el stock.','info');
       return;
     }
-    const {getAdminSession}=await import('../supabase_admin.js');
     const token=getAdminSession()?.access_token;
     if(!token){notify('Ingresá como personal autorizado desde Ventas → Pedidos online.','error');return;}
     const button=document.getElementById('btn-confirm-ocr-purchase');
