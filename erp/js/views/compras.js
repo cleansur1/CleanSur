@@ -289,12 +289,13 @@ export const ComprasView = {
                         </span>
                       </td>
                       <td class="py-3 px-4 text-center whitespace-nowrap">
-                        <button onclick="window.comprasModule.openEditInvoiceModal('${p.id}')" data-purchase-id="${p.id}" class="btn-open-edit-purchase inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-sm transition">
-                          <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-                          Ver / Editar
+                        <button onclick="window.comprasModule.viewCentralPurchase('${p.id}')" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-sm transition">
+                          <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                          Ver
                         </button>
                         ${p.status !== 'ANULADA' ? `
-                          <button onclick="window.comprasModule.cancelPurchase('${p.id}')" title="Anular Compra (Revierte Stock)" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded ml-1 transition">
+                          <button onclick="window.comprasModule.editCentralPurchase('${p.id}')" class="px-2 py-1.5 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold ml-1">Editar</button>
+                          <button onclick="window.comprasModule.cancelPurchase('${p.id}')" title="Eliminar / anular compra (revierte stock)" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded ml-1 transition">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                           </button>
                         ` : ''}
@@ -1312,18 +1313,62 @@ export const ComprasView = {
     }
   },
 
-  cancelPurchase(purchaseId) {
-    if (!confirm('¿Estás seguro de anular esta compra? Se revertirá automáticamente el stock de todos los productos ingresados y quedará registrado en auditoría.')) {
-      return;
+  async centralPurchaseRpc(action,id,changes={}) {
+    const {getAdminSession}=await import('../supabase_admin.js');
+    const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
+    const token=getAdminSession()?.access_token;
+    if(!token)throw Error('Iniciá sesión nuevamente en CleanSur');
+    const response=await fetch(base+'/rest/v1/rpc/stayclean_staff_manage_purchase',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_purchase_id:id,p_action:action,p_changes:changes})});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(result.message||'No se pudo guardar en Supabase');
+    const {readCentral}=await import('../supabase_erp_adapter.js');
+    const [purchases,products,movements]=await Promise.all(['purchases','products','inventory_movements'].map(t=>readCentral(t,{order:'id.asc',limit:10000})));
+    db.centralSetTable('purchases',purchases);db.centralSetTable('products',products);db.centralSetTable('inventory_movements',movements);
+    this.render(document.getElementById('app-content'));
+    return result;
+  },
+
+  viewCentralPurchase(id) {
+    const p=db.getPurchases().find(p=>String(p.id)===String(id));
+    if(!p)return alert('Comprobante no encontrado');
+    const esc=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const modal=document.createElement('div');
+    modal.className='fixed inset-0 z-[100] bg-slate-950/60 flex items-center justify-center p-4';
+    modal.innerHTML=`<div class="bg-white rounded-xl shadow-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-auto">
+      <div class="flex justify-between items-center mb-4"><h2 class="font-bold text-xl">Comprobante ${esc(p.invoice_number)}</h2><button class="close-purchase-detail text-xl" aria-label="Cerrar">✕</button></div>
+      <p><b>Proveedor:</b> ${esc(p.supplier_name)} · <b>Fecha:</b> ${esc(p.date)} · <b>Estado:</b> ${esc(p.status)}</p>
+      <p class="mt-2"><b>Total:</b> ${Formatter.money(p.total_final)}</p>
+      <div class="overflow-x-auto mt-4"><table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="p-2 text-left">SKU</th><th class="p-2 text-left">Producto</th><th class="p-2 text-right">Unidades</th><th class="p-2 text-right">Importe</th></tr></thead>
+      <tbody>${(p.items||[]).map(it=>`<tr class="border-b"><td class="p-2">${esc(it.code||it.sku)}</td><td class="p-2">${esc(it.product_name||it.commercial_name||it.description)}</td><td class="p-2 text-right">${esc(it.quantity_base??it.quantity??'')}</td><td class="p-2 text-right">${Formatter.money(it.line_total??it.subtotal??0)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="text-xs text-slate-500 mt-4">Detalle registrado en Supabase. El archivo original solo puede visualizarse cuando esté adjuntado al comprobante.</p></div>`;
+    modal.querySelector('.close-purchase-detail').onclick=()=>modal.remove();
+    modal.onclick=e=>{if(e.target===modal)modal.remove();};
+    document.body.append(modal);
+  },
+
+  async editCentralPurchase(id) {
+    if(!window.app?.centralReadOnly)return this.openEditInvoiceModal(id);
+    const p=db.getPurchases().find(p=>String(p.id)===String(id));
+    if(!p)return alert('Comprobante no encontrado');
+    const invoice=prompt('Número de comprobante (edición de datos, sin modificar cantidades ni stock):',p.invoice_number||'');
+    if(invoice===null)return;
+    const reason=prompt('Motivo de la corrección (obligatorio, mínimo 5 caracteres):');
+    if(reason===null)return;
+    try{await this.centralPurchaseRpc('EDITAR_DATOS',id,{invoice_number:invoice,reason});alert('Datos de comprobante actualizados en Supabase.');}
+    catch(err){alert('No se pudo editar: '+err.message);}
+  },
+
+  async cancelPurchase(purchaseId) {
+    if(!window.app?.centralReadOnly) {
+      alert('La anulación requiere conexión a Supabase para preservar el inventario.');return;
     }
-    try {
-      db.cancelPurchase(purchaseId);
-      this.closeEditModal();
-      alert('Compra anulada con éxito y stock revertido.');
-      ComprasView.render(document.getElementById('app-content'));
-    } catch (e) {
-      alert('Error al anular compra: ' + e.message);
-    }
+    const p=db.getPurchases().find(p=>String(p.id)===String(purchaseId));
+    if(!p)return alert('Compra no encontrada');
+    if(!confirm('¿Eliminar/anular '+p.invoice_number+'? Se intentará revertir su stock y conservar el historial.'))return;
+    const reason=prompt('Motivo de eliminación/anulación:');
+    if(reason===null)return;
+    try{await this.centralPurchaseRpc('ANULAR',purchaseId,{reason});alert('Compra anulada en Supabase y stock revertido.');}
+    catch(err){alert('No se pudo anular: '+err.message);}
   }
 };
 
