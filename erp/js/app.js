@@ -4,7 +4,7 @@ import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=8.0';
 import { VentasView } from './views/ventas.js?v=8.0';
-import { ComprasView } from './views/compras.js?v=12.9';
+import { ComprasView } from './views/compras.js?v=13.0';
 import { ProductosView } from './views/productos.js?v=7.0';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
@@ -432,11 +432,15 @@ async function bootCentralReadOnly() {
           const safeNavigation = handler.includes('window.app.navigate(');
           const stockControl = app.currentRoute === 'stock' && ['openAdjustModal(', 'onAdjustProductChange(', 'switchTab('].some(method => handler.includes('window.stockModule.' + method));
           const ocrReadControl = app.currentRoute === 'compras' && (
-            control.closest('#ocr-dropzone, #ocr-file-input, #btn-toggle-image, #btn-add-ocr-row') ||
+            control.closest('#ocr-dropzone, #ocr-file-input, #btn-toggle-image, #btn-add-ocr-row, #btn-confirm-ocr-purchase, #btn-merge-efa-pages') ||
             control.classList.contains('btn-remove-ocr-row')
           );
+          const purchaseControl = app.currentRoute === 'compras' && (
+            /^window\.comprasModule\.(viewCentralPurchase|editCentralPurchase|cancelPurchase|setSupplierFilter|clearFilters)\(/.test(handler) ||
+            control.matches('#centralPurchaseDetailModal .close-purchase-detail')
+          );
           const priceControl = app.currentRoute === 'productos' && handler.includes('window.productosModule.changeCentralPrice(');
-          if (safeNavigation || priceControl || stockControl || ocrReadControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          if (safeNavigation || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada para guardar en Supabase.');
         }
