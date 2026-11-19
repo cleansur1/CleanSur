@@ -1,6 +1,14 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StayClean · Inventario central</title>
-<style>body{font:15px system-ui,sans-serif;background:#f2f5f9;color:#172b46;margin:0}main{max-width:1100px;margin:32px auto;padding:0 18px}header{display:flex;justify-content:space-between;align-items:center}section{background:white;padding:22px;border-radius:12px;margin-top:20px;box-shadow:0 2px 12px #0001}input,button{padding:11px;margin:5px;border:1px solid #ccd5e0;border-radius:8px}button{background:#0e3a6b;color:white;cursor:pointer}button:disabled{opacity:.5}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #e7edf3}th{background:#f6f8fb}#error{color:#a21d2a}small{color:#53677b}.scroll{overflow:auto}</style></head><body>
+<style>body{font:15px system-ui,sans-serif;background:#f2f5f9;color:#172b46;margin:0}main{max-width:1100px;margin:32px auto;padding:0 18px}header{display:flex;justify-content:space-between;align-items:center}section{background:white;padding:22px;border-radius:12px;margin-top:20px;box-shadow:0 2px 12px #0001}input,button{padding:11px;margin:5px;border:1px solid #ccd5e0;border-radius:8px}button{background:#0e3a6b;color:white;cursor:pointer}button:disabled{opacity:.5}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #e7edf3}th{background:#f6f8fb}#error{color:#a21d2a}small{color:#53677b}.scroll{overflow:auto}</style><script>
+  if (location.hostname === 'cleansur1.github.io' && location.pathname === '/') {
+    const erp = new URL('/erp/', location.origin);
+    erp.search = location.search;
+    erp.hash = location.hash;
+    location.replace(erp);
+  }
+</script>
+</head><body>
 <main><header><h1>StayClean · Inventario central</h1><small>Supabase · Solo lectura</small></header>
 <section id="login"><h2>Acceso del personal</h2><form id="loginForm"><input id="email" type="email" placeholder="Correo" autocomplete="username" required><input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" required><button>Ingresar</button></form><p id="error" role="alert"></p><small>Solo usuarios autorizados en Supabase Auth y staff_access. No se permite modificar el stock desde esta pantalla.</small></section>
 <section id="inventory" hidden><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Productos y stock</h2><div><button id="reload">Actualizar</button><button id="logout">Salir</button></div></div><p id="summary"></p><nav style="margin:12px 0"><button id="showProducts">Productos</button><button id="showPurchases">Compras</button><button id="showOrders">Pedidos</button><button id="showMovements">Movimientos</button></nav><div class="scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th>Stock base</th><th>Precio venta</th><th>Costo</th><th>Estado</th></tr></thead><tbody id="rows"></tbody></table></div></section></main>
