@@ -2,11 +2,12 @@
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
 import { db } from './db.js';
 import { Formatter } from './models.js';
-import { staycleanPublicCatalog, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js';
+import { staycleanPublicCatalog, staycleanPublicCatalogAromas, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js?v=aromas-1';
 
 class TiendaStandaloneApp {
   constructor() {
     this.products = [];
+    this.catalogAromas = new Map();
     this.cart = this.loadCart();
     this.pendingRequestId = sessionStorage.getItem('stayclean_pending_order_id') || null;
     this.customerProfile = null;
@@ -97,6 +98,30 @@ class TiendaStandaloneApp {
     }catch(e){alert('Cuenta StayClean: '+e.message);}
   }
 
+  async loadAromaFilter() {
+    const select = document.getElementById('filterAroma');
+    const note = document.getElementById('aromaFilterNote');
+    if (!select || !note) return;
+    try {
+      const aromas = await staycleanPublicCatalogAromas();
+      const labels = new Map();
+      for (const {product_id, aroma} of aromas) {
+        const key = aroma.trim().toLocaleLowerCase('es-AR');
+        labels.set(key, labels.get(key) ?? aroma);
+        if (!this.catalogAromas.has(product_id)) this.catalogAromas.set(product_id, new Set());
+        this.catalogAromas.get(product_id).add(key);
+      }
+      for (const [key, label] of [...labels].sort((a,b) => a[1].localeCompare(b[1], 'es-AR'))) {
+        select.add(new Option(label, key));
+      }
+      select.disabled = labels.size === 0;
+      if (labels.size) note.textContent = 'Aromas registrados. Consultá disponibilidad por aroma.';
+    } catch (error) {
+      note.textContent = 'No se pudieron cargar los aromas.';
+      console.error('No se pudo cargar el filtro de aromas', error);
+    }
+  }
+
   async loadProducts() {
     // Catálogo remoto: jamás mostrar stock local como si fuera compartido.
     try {
@@ -109,6 +134,7 @@ class TiendaStandaloneApp {
         reference_price: Number(p.sale_price)
       }));
       this.applyFilters();
+      void this.loadAromaFilter();
     } catch (error) {
       this.products = [];
       this.applyFilters();
@@ -209,6 +235,8 @@ class TiendaStandaloneApp {
     document.getElementById('filterPrice').value = 'all';
     document.getElementById('filterCategory').value = 'all';
     document.getElementById('sortOrder').value = 'featured';
+    const aroma = document.getElementById('filterAroma');
+    if (aroma) aroma.value = '';
     this.clearSearch();
   }
 
@@ -217,17 +245,19 @@ class TiendaStandaloneApp {
     const price = document.getElementById('filterPrice')?.value || 'all';
     const cat = document.getElementById('filterCategory')?.value || 'all';
     const sort = document.getElementById('sortOrder')?.value || 'featured';
+    const aroma = document.getElementById('filterAroma')?.value || '';
 
     this.activeFilters.availability = avail;
     this.activeFilters.price = price;
     this.activeFilters.category = cat;
     this.activeFilters.sort = sort;
 
-    const hasActiveFilters = avail !== 'all' || price !== 'all' || cat !== 'all' || this.activeFilters.search;
+    const hasActiveFilters = avail !== 'all' || price !== 'all' || cat !== 'all' || aroma !== '' || this.activeFilters.search;
     const btnClear = document.getElementById('btnClearFilters');
     if (btnClear) btnClear.classList.toggle('hidden', !hasActiveFilters);
 
     let list = this.products.filter(p => {
+      if (aroma && !this.catalogAromas.get(p.id)?.has(aroma)) return false;
       // 1. Disponibilidad
       if (avail === 'in_stock' && !p.in_stock) return false;
       if (avail === 'out_of_stock' && p.in_stock) return false;

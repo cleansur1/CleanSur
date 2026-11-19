@@ -14,6 +14,7 @@ async function rpc(name, payload = {}) {
 }
 
 export const staycleanPublicCatalog = () => rpc('stayclean_public_catalog');
+export const staycleanPublicCatalogAromas = () => rpc('stayclean_public_catalog_aromas');
 export const staycleanCreateOrder = order => rpc('create_web_order_with_stock_deduction', { p_order: order });
 
 export const staycleanStaffOrders = async (token) => {

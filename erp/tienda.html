@@ -231,6 +231,13 @@
             <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-[#4EA1DD] absolute right-2.5 top-3 pointer-events-none"></i>
           </div>
 
+          <div>
+            <select id="filterAroma" aria-label="Filtrar por aroma" aria-describedby="aromaFilterNote" onchange="window.tiendaApp.applyFilters()" disabled class="rounded-lg border border-[#8FD0F4]/50 bg-[#E9F4FB]/60 px-3 py-2 font-semibold text-[#0E3A6B]">
+              <option value="">Aroma (Todos)</option>
+            </select>
+            <p id="aromaFilterNote" class="mt-1 text-xs text-slate-500">Aún no hay aromas cargados.</p>
+          </div>
+
           <!-- Botón Limpiar Filtros -->
           <button id="btnClearFilters" onclick="window.tiendaApp.resetFilters()" class="hidden px-2.5 py-1.5 text-slate-500 hover:text-rose-600 font-bold underline text-xs">
             Limpiar filtros
@@ -500,6 +507,6 @@
   </div>
 
   <!-- Script de la Tienda Standalone -->
-  <script type="module" src="js/tienda_standalone.js?v=5.0"></script>
+  <script type="module" src="js/tienda_standalone.js?v=9.2"></script>
 </body>
 </html>
