@@ -14,7 +14,7 @@ import { ComparadorView } from './views/comparador.js?v=6.0';
 import { ReposicionView } from './views/reposicion.js?v=6.0';
 import { EstacionalidadView } from './views/estacionalidad.js?v=6.0';
 import { GastosView } from './views/gastos.js?v=6.0';
-import { OrdenesCompraView } from './views/ordenes_compra.js?v=6.0';
+import { OrdenesCompraView } from './views/ordenes_compra.js?v=6.1';
 import { ReportesView } from './views/reportes.js?v=6.0';
 import { AuditoriaView } from './views/auditoria.js?v=6.0';
 import { ConfiguracionView } from './views/configuracion.js?v=6.0';
@@ -439,12 +439,14 @@ async function bootCentralReadOnly() {
             control.matches('#centralPurchaseDetailModal .close-purchase-detail')
           );
           const priceControl = app.currentRoute === 'productos' && handler.includes('window.productosModule.changeCentralPrice(');
-          if (safeNavigation || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          const purchaseOrderControl = app.currentRoute === 'ordenes_compra' &&
+            (control.matches('#newPurchaseOrder') || control.closest('#purchaseOrderDialog'));
+          if (purchaseOrderControl || safeNavigation || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada para guardar en Supabase.');
         }
       }, true);
-      document.addEventListener('submit', e => { if (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
+      document.addEventListener('submit', e => { if ((e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
     } catch (err) {
       error.textContent = err.message || 'No se pudo iniciar la sesión';
       await signOutAdmin().catch(()=>{});
