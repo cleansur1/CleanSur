@@ -27,13 +27,26 @@ function contactLinks(order) {
   const whatsapp = /^549\d{10}$/.test(phone)
     ? 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message)
     : 'https://wa.me/?text=' + encodeURIComponent(message);
-  const email = supplier?.email ? '<a class="underline" href="mailto:' + encodeURIComponent(supplier.email) +
-    '?subject=' + encodeURIComponent('Orden de compra CleanSur ' + numberOf(order)) +
-    '&amp;body=' + encodeURIComponent(message) + '">Abrir correo</a>' : '';
-  return '<a class="underline" target="_blank" rel="noopener" href="' + escape(whatsapp) + '">' +
-    (/^549\d{10}$/.test(phone) ? 'Abrir WhatsApp' : 'Compartir por WhatsApp') + '</a> ' + email;
+  return '<a class="rounded border p-2 text-green-700" target="_blank" rel="noopener" aria-label="Compartir por WhatsApp" title="Compartir por WhatsApp" href="' + escape(whatsapp) + '">' +
+    '<i data-lucide="message-circle" class="h-4 w-4"></i></a>';
 }
 
+
+const canManage = order => /^(borrador|enviada|confirmada)$/i.test(order.status || '');
+
+async function orderRpc(name, payload) {
+  const token = getAdminSession()?.access_token;
+  if (!token) throw Error('Volvé a iniciar sesión para guardar la orden.');
+  const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/' + name, {
+    method: 'POST',
+    headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const order = await response.json();
+  if (!response.ok) throw Error(order.message || 'No se pudo guardar la orden.');
+  db.centralSetTable('purchase_orders', [order, ...db.getPurchaseOrders().filter(row => row.id !== order.id)]);
+  return order;
+}
 
 export const OrdenesCompraView = {
   render(container) {
@@ -82,12 +95,15 @@ export const OrdenesCompraView = {
                     </td>
                     <td class="py-3 px-4 text-right font-bold text-slate-900">${Formatter.money(totalOf(po))}</td>
                     <td class="py-3 px-4 text-center">
-                      ${Array.isArray(po.items) && po.items.length ? `<details class="text-left">
-                        <summary class="cursor-pointer">Ver pedido y enviar</summary>
-                        <pre class="my-2 whitespace-pre-wrap text-xs">${escape(orderMessage(po))}</pre>
-                        ${contactLinks(po)}
-                      </details>` : ''}
-                      ${!window.app.centralReadOnly && po.status !== 'Recibida' ? `
+                      <div class="flex justify-center gap-2 whitespace-nowrap" data-order-id="${escape(po.id)}">
+                        <button type="button" data-purchase-order-control data-view-order aria-label="Ver orden" title="Ver" class="rounded border p-2"><i data-lucide="eye" class="h-4 w-4"></i></button>
+                        ${canManage(po) ? `
+                          <button type="button" data-purchase-order-control data-edit-order aria-label="Editar orden" title="Editar" class="rounded border p-2 text-blue-700"><i data-lucide="pencil" class="h-4 w-4"></i></button>
+                          <button type="button" data-purchase-order-control data-delete-order aria-label="Eliminar orden" title="Eliminar" class="rounded border p-2 text-rose-700"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
+                          ${contactLinks(po)}
+                        ` : ''}
+                      </div>
+                      ${!window.app.centralReadOnly && canManage(po) ? `
                         <button onclick="window.ordenesCompraModule.receivePO('${po.id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold">
                           Recibir Mercadería
                         </button>
@@ -105,10 +121,48 @@ export const OrdenesCompraView = {
     `;
 
     container.querySelector('#newPurchaseOrder').onclick = () => this.openNewOrder(container);
+    for (const actions of container.querySelectorAll('[data-order-id]')) {
+      const order = pos.find(row => String(row.id) === actions.dataset.orderId);
+      actions.querySelector('[data-view-order]').onclick = () => this.viewOrder(order);
+      const edit = actions.querySelector('[data-edit-order]');
+      const remove = actions.querySelector('[data-delete-order]');
+      if (edit) edit.onclick = () => this.openNewOrder(container, order);
+      if (remove) remove.onclick = async () => {
+        if (!confirm('¿Cancelar la orden ' + numberOf(order) + '?')) return;
+        remove.disabled = true;
+        try {
+          if (window.app.centralReadOnly) {
+            await orderRpc('stayclean_staff_manage_purchase_order', { p_id: order.id, p_expected: order.items, p_items: null });
+          } else {
+            db.saveTable('purchase_orders', db.getPurchaseOrders().map(row => row.id === order.id ? { ...row, status: 'Cancelada' } : row));
+          }
+          if (window.app.currentRoute === 'ordenes_compra') this.render(container);
+          window.app.showNotification('Orden cancelada.', 'success');
+        } catch (error) {
+          window.app.showNotification(error.message, 'error');
+        } finally {
+          remove.disabled = false;
+        }
+      };
+    }
     if (window.lucide) window.lucide.createIcons();
   },
 
-  openNewOrder(container) {
+  viewOrder(order) {
+    const dialog = document.createElement('dialog');
+    dialog.id = 'purchaseOrderDialog';
+    dialog.className = 'w-[calc(100%-2rem)] max-w-2xl rounded-xl p-6 shadow-xl backdrop:bg-slate-900/50';
+    dialog.innerHTML = `<h2 class="text-xl font-bold">Orden ${escape(numberOf(order))}</h2>
+      <p class="mt-1 text-sm">${escape(order.supplier_name)} · ${escape(order.status)}</p>
+      <pre class="my-4 max-h-[55vh] overflow-auto whitespace-pre-wrap font-sans text-sm">${escape(order.items?.length ? orderMessage(order) : 'Sin productos registrados.')}</pre>
+      <button type="button" class="rounded border px-4 py-2">Cerrar</button>`;
+    dialog.querySelector('button').onclick = () => dialog.close();
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
+  },
+
+  openNewOrder(container, existing = null) {
     const suppliers = db.getSuppliers().filter(supplier => supplier.active !== false)
       .sort((left, right) => left.name.localeCompare(right.name, 'es'));
     const dialog = document.createElement('dialog');
@@ -116,7 +170,7 @@ export const OrdenesCompraView = {
     dialog.setAttribute('aria-labelledby', 'purchaseOrderTitle');
     dialog.className = 'w-[calc(100%-2rem)] max-w-3xl rounded-xl p-6 shadow-xl backdrop:bg-slate-900/50';
     dialog.innerHTML = `<form class="space-y-4">
-      <h2 id="purchaseOrderTitle" class="text-xl font-bold">Nueva orden de compra</h2>
+      <h2 id="purchaseOrderTitle" class="text-xl font-bold">${existing ? 'Editar orden ' + escape(numberOf(existing)) : 'Nueva orden de compra'}</h2>
       <label class="block">Proveedor
         <select name="supplier" required class="block w-full rounded border p-2">
           <option value="">Elegí un proveedor</option>
@@ -135,7 +189,8 @@ export const OrdenesCompraView = {
     const feedback = form.querySelector('[data-error]');
     const save = form.querySelector('[type=submit]');
     let products = [];
-    let requestId = crypto.randomUUID();
+    const requestId = crypto.randomUUID();
+    const existingItems = new Map((existing?.items || []).map(item => [String(item.product_id), item]));
 
     supplierInput.onchange = () => {
       const supplierId = supplierInput.value;
@@ -145,59 +200,68 @@ export const OrdenesCompraView = {
       products = supplierId ? db.getProducts().filter(product => product.active !== false && (
         product.preferred_supplier_id === supplierId || product.supplier_id === supplierId || supplierProductIds.has(product.id)
       )).sort((left, right) => left.name.localeCompare(right.name, 'es')) : [];
+      if (existing) {
+        const listed = new Set(products.map(product => String(product.id)));
+        for (const [id, item] of existingItems) {
+          if (!listed.has(id)) products.push({ id, name: item.product_name || item.name || id, sku: item.sku, purchase_unit: item.unit });
+        }
+      }
       productsBox.innerHTML = products.length ? products.map((product, index) => `
         <label class="flex items-center justify-between gap-3 border-b py-2 text-sm">
           <span>${escape(product.name)} <small>${escape(product.sku)} · ${escape(product.purchase_unit || 'unidad')}</small></span>
-          <input type="number" min="0" max="100000" step="any" inputmode="decimal" data-quantity="${index}" placeholder="0" class="w-24 rounded border p-2">
+          <input type="number" min="0" max="100000" step="any" inputmode="decimal" data-quantity="${index}" value="${escape(existingItems.get(String(product.id))?.quantity ?? '')}" placeholder="0" class="w-24 rounded border p-2">
         </label>`).join('') : (supplierId ? '<p>Este proveedor no tiene productos vinculados.</p>' : '');
       save.disabled = !products.length;
       feedback.textContent = '';
     };
-    form.querySelector('[data-close]').onclick = () => { if (!supplierInput.disabled) dialog.close(); };
-    dialog.addEventListener('cancel', event => { if (supplierInput.disabled) event.preventDefault(); });
+    if (existing) {
+      supplierInput.value = existing.supplier_id;
+      supplierInput.onchange();
+      supplierInput.disabled = true;
+    }
+    let saving = false;
+    form.querySelector('[data-close]').onclick = () => { if (!saving) dialog.close(); };
+    dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
     form.onsubmit = async event => {
       event.preventDefault();
-      if (supplierInput.disabled) return;
+      if (saving) return;
       const supplier = db.getSupplier(supplierInput.value);
       if (!supplier) return;
       const items = products.flatMap((product, index) => {
         const quantity = Number(productsBox.querySelector('[data-quantity="' + index + '"]').value);
-        return quantity > 0 ? [{
+        const previous = existingItems.get(String(product.id));
+        return quantity > 0 ? [previous ? { ...previous, quantity } : {
           product_id: product.id, product_name: product.name, sku: product.sku || '',
           unit: product.purchase_unit || 'unidad', quantity, unit_cost: Number(product.purchase_cost || 0)
         }] : [];
       });
       if (!items.length) { feedback.textContent = 'Ingresá una cantidad para al menos un producto.'; return; }
+      saving = true;
       save.disabled = true;
       supplierInput.disabled = true;
       feedback.textContent = '';
       try {
         let order;
         if (window.app.centralReadOnly) {
-          const token = getAdminSession()?.access_token;
-          if (!token) throw Error('Volvé a iniciar sesión para guardar la orden.');
-          const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_create_purchase_order', {
-            method: 'POST',
-            headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ p_id: requestId, p_supplier: supplier.id, p_items: items })
-          });
-          order = await response.json();
-          if (!response.ok) throw Error(order.message || 'No se pudo guardar la orden.');
-          db.centralSetTable('purchase_orders', [order, ...db.getPurchaseOrders().filter(row => row.id !== order.id)]);
+          order = existing
+            ? await orderRpc('stayclean_staff_manage_purchase_order', { p_id: existing.id, p_expected: existing.items, p_items: items })
+            : await orderRpc('stayclean_staff_create_purchase_order', { p_id: requestId, p_supplier: supplier.id, p_items: items });
         } else {
-          order = db.savePurchaseOrder({
+          if (existing) {
+            order = { ...existing, items, estimated_total: items.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0) };
+            db.saveTable('purchase_orders', db.getPurchaseOrders().map(row => row.id === existing.id ? order : row));
+          } else order = db.savePurchaseOrder({
             supplier_id: supplier.id, supplier_name: supplier.name, date: new Date().toISOString().slice(0, 10),
             items, total: items.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0)
           });
         }
         dialog.close();
-        this.render(container);
-        const latest = container.querySelector('details');
-        if (latest) latest.open = true;
+        if (window.app.currentRoute === 'ordenes_compra') this.render(container);
         window.app.showNotification('Orden ' + numberOf(order) + ' guardada.', 'success');
       } catch (error) {
         feedback.textContent = error.message;
-        supplierInput.disabled = false;
+        saving = false;
+        supplierInput.disabled = Boolean(existing);
         save.disabled = false;
       }
     };
