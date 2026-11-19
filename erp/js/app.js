@@ -3,7 +3,7 @@ import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=8.1';
-import { VentasView } from './views/ventas.js?v=8.0';
+import { VentasView } from './views/ventas.js?v=8.1';
 import { ComprasView } from './views/compras.js?v=13.8';
 import { ProductosView } from './views/productos.js?v=7.0';
 import { StockView } from './views/stock.js?v=6.0';
@@ -14,7 +14,6 @@ import { ComparadorView } from './views/comparador.js?v=6.0';
 import { ReposicionView } from './views/reposicion.js?v=6.0';
 import { EstacionalidadView } from './views/estacionalidad.js?v=6.0';
 import { GastosView } from './views/gastos.js?v=6.0';
-import { PedidosView } from './views/pedidos.js?v=6.0';
 import { OrdenesCompraView } from './views/ordenes_compra.js?v=6.0';
 import { ReportesView } from './views/reportes.js?v=6.0';
 import { AuditoriaView } from './views/auditoria.js?v=6.0';
@@ -34,7 +33,7 @@ class App {
     this.views = {
       dashboard: DashboardView,
       ventas: VentasView,
-      pedidos: PedidosView,
+      pedidos: VentasView,
       caja: CajaView,
       arca: ArcaView,
       compras: ComprasView,
