@@ -3,7 +3,7 @@ import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=8.1';
-import { VentasView } from './views/ventas.js?v=8.1';
+import { VentasView } from './views/ventas.js?v=8.2';
 import { ComprasView } from './views/compras.js?v=13.8';
 import { ProductosView } from './views/productos.js?v=7.0';
 import { StockView } from './views/stock.js?v=6.0';
@@ -441,7 +441,10 @@ async function bootCentralReadOnly() {
           const priceControl = app.currentRoute === 'productos' && handler.includes('window.productosModule.changeCentralPrice(');
           const purchaseOrderControl = app.currentRoute === 'ordenes_compra' &&
             (control.matches('#newPurchaseOrder') || control.closest('#purchaseOrderDialog'));
-          if (purchaseOrderControl || safeNavigation || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
+            (control.matches('[data-new-sale], #btnConfirmSale') ||
+              handler.startsWith('window.ventasModule.removeFromCart('));
+          if (salesControl || purchaseOrderControl || safeNavigation || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada para guardar en Supabase.');
         }
