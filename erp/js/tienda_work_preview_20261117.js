@@ -898,6 +898,50 @@ class TiendaStandaloneApp {
     if (modal) modal.classList.add('hidden');
   }
 
+  showPaymentReceipt(status) {
+    const dialog = document.createElement('dialog');
+    dialog.id = 'paymentReceiptDialog';
+    dialog.setAttribute('aria-labelledby', 'paymentReceiptTitle');
+    dialog.className = 'w-[calc(100%-2rem)] max-w-md rounded-xl p-6 shadow-xl backdrop:bg-slate-900/50';
+    dialog.innerHTML = `
+      <article class="payment-receipt">
+        <p>CleanSur · Tienda de prueba</p>
+        <h2 id="paymentReceiptTitle">¡Pago aprobado!</h2>
+        <p data-order></p>
+        <p data-total></p>
+        <p>Medio de pago · Mercado Pago</p>
+        <p>Comprobante de prueba sin validez fiscal.</p>
+      </article>
+      <div class="mt-6 flex flex-wrap gap-2">
+        <button type="button" data-download class="rounded-lg bg-slate-900 px-4 py-2 text-white">Descargar comprobante</button>
+        <button type="button" data-print class="rounded-lg border px-4 py-2">Imprimir</button>
+        <form method="dialog"><button class="rounded-lg border px-4 py-2">Cerrar</button></form>
+      </div>`;
+    dialog.querySelector('[data-order]').textContent = 'Pedido ' + status.order_number;
+    const total = dialog.querySelector('[data-total]');
+    if (status.total == null) total.remove();
+    else total.textContent = 'Total pagado · ' + Formatter.money(Number(status.total));
+
+    dialog.querySelector('[data-download]').addEventListener('click', () => {
+      const receipt = dialog.querySelector('article').outerHTML;
+      const file = new Blob([
+        '<!doctype html><html lang="es"><meta charset="utf-8"><title>Comprobante CleanSur</title>',
+        '<style>body{font:16px system-ui;margin:2rem;color:#0f172a}article{max-width:36rem;margin:auto;border:1px solid #cbd5e1;padding:2rem}h2{color:#166534}</style>',
+        receipt, '</html>'
+      ], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'CleanSur-' + status.order_number + '.html';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+    dialog.querySelector('[data-print]').addEventListener('click', () => window.print());
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+
   async handleMpReturn() {
     const params = new URLSearchParams(window.location.search);
     const result = params.get('mp');
@@ -929,7 +973,8 @@ class TiendaStandaloneApp {
         sessionStorage.removeItem('stayclean_qa_pending_mp_order_id');
         sessionStorage.removeItem('stayclean_qa_pending_mp_cart');
         await this.loadProducts();
-        showNotice('¡Pago aprobado! Pedido ' + status.order_number + ' registrado correctamente en StayClean.');
+        this.showPaymentReceipt(status);
+        notice.remove();
       } else if (status.status === 'pending' || status.status === 'fulfillment_review') {
         if (status.status === 'fulfillment_review') {
           showNotice('Tu pago fue acreditado, pero el pedido requiere revisión manual de stock. No vuelvas a pagar. Contactá a StayClean e indicá el identificador ' + requestId + '.');
