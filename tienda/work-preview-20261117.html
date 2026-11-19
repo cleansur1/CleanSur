@@ -75,6 +75,17 @@
     }
   </style>
   <link rel="stylesheet" href="../erp/assets/cleansur-brand.css?v=3">
+  <style>
+    #paymentReceiptDialog .payment-receipt { color: #0f172a; }
+    #paymentReceiptDialog .payment-receipt h2 { color: #166534; font-size: 1.65rem; font-weight: 800; margin: .5rem 0; }
+    #paymentReceiptDialog .payment-receipt p { margin: .35rem 0; }
+    @media print {
+      body:has(#paymentReceiptDialog[open]) > :not(#paymentReceiptDialog) { display: none !important; }
+      #paymentReceiptDialog[open] { position: static; margin: 0; max-width: none; width: auto; box-shadow: none; }
+      #paymentReceiptDialog[open]::backdrop { background: transparent; }
+      #paymentReceiptDialog[open] > :not(.payment-receipt) { display: none !important; }
+    }
+  </style>
 </head>
 <body class="cs-store min-h-screen flex flex-col antialiased">
   <div role="status" style="position:sticky;top:0;z-index:9999;background:#fff3cd;color:#664d03;padding:10px;text-align:center;font-weight:700;border-bottom:2px solid #ffc107">ENTORNO DE PRUEBAS · NO REALIZAR PAGOS REALES · Catálogo, pedidos y stock ficticios</div>
@@ -504,6 +515,6 @@
   </div>
 
   <!-- Script de la Tienda Standalone -->
-  <script type="module" src="../erp/js/tienda_work_preview_20261117.js?v=qa-isolated-2"></script>
+  <script type="module" src="../erp/js/tienda_work_preview_20261117.js?v=qa-isolated-3"></script>
 </body>
 </html>
