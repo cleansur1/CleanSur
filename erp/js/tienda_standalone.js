@@ -18,7 +18,7 @@ class TiendaStandaloneApp {
       search: '',
       sort: 'featured'
     };
-    this.companyWhatsApp = '5492942498120'; // WhatsApp de StayClean Caviahue
+    this.companyWhatsApp = '5492942487227'; // WhatsApp de StayClean Caviahue
   }
 
   init() {
