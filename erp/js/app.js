@@ -14,7 +14,7 @@ import { ComparadorView } from './views/comparador.js?v=6.0';
 import { ReposicionView } from './views/reposicion.js?v=6.0';
 import { EstacionalidadView } from './views/estacionalidad.js?v=6.0';
 import { GastosView } from './views/gastos.js?v=6.0';
-import { OrdenesCompraView } from './views/ordenes_compra.js?v=6.1';
+import { OrdenesCompraView } from './views/ordenes_compra.js?v=6.2';
 import { ReportesView } from './views/reportes.js?v=6.0';
 import { AuditoriaView } from './views/auditoria.js?v=6.0';
 import { ConfiguracionView } from './views/configuracion.js?v=6.0';
@@ -441,7 +441,7 @@ async function bootCentralReadOnly() {
           );
           const priceControl = app.currentRoute === 'productos' && handler.includes('window.productosModule.changeCentralPrice(');
           const purchaseOrderControl = app.currentRoute === 'ordenes_compra' &&
-            (control.matches('#newPurchaseOrder') || control.closest('#purchaseOrderDialog'));
+            (control.matches('[data-purchase-order-control]') || control.closest('#purchaseOrderDialog'));
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
             (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale') ||
               handler.startsWith('window.ventasModule.removeFromCart('));
