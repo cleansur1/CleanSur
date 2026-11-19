@@ -1121,12 +1121,6 @@ export const OcrFacturasView = {
     if(this.ocrRequiresReview || inv.key==='OCR_REAL_PENDIENTE_REVISION') {
       notify('La factura requiere revisión antes de modificar inventario.','error');return;
     }
-    // No volver a ingresar un pedido confirmado anteriormente.
-    const alreadyReceived = String(inv.invoice_number||'').replace(/\s/g,'').toUpperCase()==='PED-7601';
-    if (alreadyReceived) {
-      notify('SYS PED-7601 ya está registrado en Supabase con 64 unidades ingresadas. No se duplicó el stock.','info');
-      return;
-    }
     const token=getAdminSession()?.access_token;
     if(!token){notify('Ingresá como personal autorizado desde Ventas → Pedidos online.','error');return;}
     const button=document.getElementById('btn-confirm-ocr-purchase');
@@ -1189,7 +1183,14 @@ export const OcrFacturasView = {
       notify('Factura '+invoice+' recibida en Supabase. Stock central actualizado.','success');
       this.extractedInvoice=null;
       await window.comprasModule.reloadAfterPurchaseChange();
-    }catch(err){console.error(err);notify('No se pudo confirmar la recepción: '+err.message,'error');}
+    }catch(err){
+      if(err.message==='Factura de proveedor ya registrada') {
+        notify('Este comprobante ya está registrado para el proveedor. No se duplicó el stock.','info');
+      } else {
+        console.error(err);
+        notify('No se pudo confirmar la recepción: '+err.message,'error');
+      }
+    }
     finally {
       this.confirmingPurchase=false;
       if(button)button.disabled=false;
