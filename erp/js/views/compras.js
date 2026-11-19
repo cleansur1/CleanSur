@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { Formatter, PackagingEngine, LogisticsCostDistributor } from '../models.js';
-import { OcrFacturasView } from './ocr_facturas.js?v=10.5';
+import { OcrFacturasView } from './ocr_facturas.js?v=10.6';
 let filterSupplierId = 'ALL';
 let filterDateFrom = '';
 let filterDateTo = '';
@@ -1457,12 +1457,7 @@ export const ComprasView = {
     if(!window.app?.centralReadOnly)return this.openEditInvoiceModal(id);
     const p=db.getPurchases().find(p=>String(p.id)===String(id));
     if(!p)return alert('Comprobante no encontrado');
-    const invoice=prompt('Número de comprobante (edición de datos, sin modificar cantidades ni stock):',p.invoice_number||'');
-    if(invoice===null)return;
-    const reason=prompt('Motivo de la corrección (obligatorio, mínimo 5 caracteres):');
-    if(reason===null)return;
-    try{await this.centralPurchaseRpc('EDITAR_DATOS',id,{invoice_number:invoice,reason});await this.reloadAfterPurchaseChange();alert('Datos de comprobante actualizados en Supabase.');}
-    catch(err){alert('No se pudo editar: '+err.message);}
+    window.app.navigate('compras', {action:'ocr', editingPurchase:p});
   },
 
   async cancelPurchase(purchaseId) {

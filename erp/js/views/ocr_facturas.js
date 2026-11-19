@@ -7,6 +7,9 @@ import { getAdminSession, signInAdmin } from '../supabase_admin.js';
 import { db } from '../db.js?v=6.0';
 import { Formatter, PackagingEngine } from '../models.js?v=6.0';
 
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch]);
+
 export const KNOWN_INVOICES = {
   EFA_P1: {
     key: 'EFA_P1',
@@ -166,6 +169,40 @@ export const OcrFacturasView = {
     this.hostContainer = container;
     window.ocrModule = this;
 
+    if (params.editingPurchase) {
+      const purchase = params.editingPurchase;
+      const products = db.getProducts();
+      this.editingPurchase = purchase;
+      this.ocrRequiresReview = false;
+      this.ocrDuplicateReview = [];
+      this.ocrSupplierClaims = [];
+      this.editReason = '';
+      this.extractedInvoice = {
+        ...purchase, key: null, page_info: null,
+        invoice_stated_total: purchase.invoice_stated_total ?? purchase.total_final,
+        vat_included: purchase.vat_included !== false,
+        items: (purchase.items || []).map((item, index) => {
+          const product = products.find(entry => entry.id === item.product_id);
+          const boxes = Number(item.boxes_count ?? item.quantity_base);
+          return {
+            ...item, originalIndex: index, code: item.code || item.sku || product?.sku || '',
+            description: item.invoice_description || item.description || item.product_name || '',
+            boxes_count: boxes, units_per_box: Number(item.units_per_box ?? 1),
+            pricing_mode: item.pricing_mode || 'PER_BOX',
+            unit_price: item.unit_price ?? (item.line_total == null ? Number(item.unit_cost) : Number(item.line_total) / boxes),
+            discount_pct: item.discount_pct ?? 0
+          };
+        })
+      };
+      container.innerHTML = '<div id="ocr-result-container"></div>';
+      this.refreshResultView();
+      return;
+    }
+    if (this.editingPurchase) {
+      this.editingPurchase = null;
+      this.extractedInvoice = null;
+    }
+
     if (params.preset && !this.extractedInvoice) {
       if (params.preset === 'EFA_FULL') {
         this.extractedInvoice = buildEfaCombinedInvoice();
@@ -284,7 +321,7 @@ export const OcrFacturasView = {
     const existingPurchases = db.getPurchases().filter(p => p.status !== 'ANULADA');
     const cleanInvNum = String(inv.invoice_number || '').trim().toUpperCase();
     const matchingExistingPurchase = existingSupplier && cleanInvNum
-      ? existingPurchases.find(p => p.supplier_id === existingSupplier.id && String(p.invoice_number || '').trim().toUpperCase() === cleanInvNum)
+      ? existingPurchases.find(p => p.id !== this.editingPurchase?.id && p.supplier_id === existingSupplier.id && String(p.invoice_number || '').trim().toUpperCase() === cleanInvNum)
       : null;
 
     const currentProducts = db.getProducts();
@@ -376,12 +413,12 @@ export const OcrFacturasView = {
             </div>
             <div>
               <div class="flex flex-wrap items-center gap-2">
-                <h3 class="text-lg font-black text-slate-800">Resultado de la Lectura de la Factura</h3>
+                <h3 class="text-lg font-black text-slate-800">${this.editingPurchase ? 'Editar factura' : 'Resultado de la Lectura de la Factura'}</h3>
                 <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-100 text-blue-800">${inv.page_info || `${inv.items.length} artículos leídos`}</span>
                 ${this.uploadedFileName ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">${this.uploadedFileName}</span>` : ''}
               </div>
               <p class="text-xs text-slate-500 mt-0.5">
-                Verificá cantidades, empaques (cajas a unidades de venta individual) y precios antes de confirmar el ingreso al inventario.
+                ${this.editingPurchase ? 'Corregí los renglones y guardá los cambios en la misma factura.' : 'Verificá cantidades, empaques y precios antes de confirmar el ingreso al inventario.'}
               </p>
             </div>
           </div>
@@ -427,7 +464,7 @@ export const OcrFacturasView = {
           <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-start gap-3">
             <i data-lucide="git-merge" class="w-5 h-5 text-indigo-600 shrink-0 mt-0.5"></i>
             <div class="text-xs text-indigo-950">
-              <p class="font-extrabold">Comprobante ${inv.invoice_number} de ${existingSupplier.name} ya registrado (${matchingExistingPurchase.items.length} artículos cargados):</p>
+              <p class="font-extrabold">Comprobante ${escapeHtml(inv.invoice_number)} de ${existingSupplier.name} ya registrado (${matchingExistingPurchase.items.length} artículos cargados):</p>
               <p class="mt-0.5">
                 Al confirmar, el sistema anexará estos artículos a la misma factura sin duplicar el proveedor ni el encabezado.
               </p>
@@ -453,23 +490,23 @@ export const OcrFacturasView = {
 
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Razón Social / Nombre del Proveedor</label>
-              <input type="text" id="ocr-supplier-name" value="${inv.supplier_name || ''}" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-extrabold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none">
+              <input type="text" id="ocr-supplier-name" ${this.editingPurchase ? 'readonly' : ''} value="${escapeHtml(inv.supplier_name)}" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-extrabold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
 
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">CUIT</label>
-                <input type="text" id="ocr-supplier-cuit" value="${inv.supplier_cuit || ''}" placeholder="30-00000000-0" class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-700">
+                <input type="text" id="ocr-supplier-cuit" ${this.editingPurchase ? 'readonly' : ''} value="${escapeHtml(inv.supplier_cuit)}" placeholder="30-00000000-0" class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-700">
               </div>
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Teléfono / Contacto</label>
-                <input type="text" id="ocr-supplier-phone" value="${inv.supplier_phone || ''}" placeholder="Teléfono" class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-700">
+                <input type="text" id="ocr-supplier-phone" ${this.editingPurchase ? 'readonly' : ''} value="${escapeHtml(inv.supplier_phone)}" placeholder="Teléfono" class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-700">
               </div>
             </div>
 
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Dirección / Localidad</label>
-              <input type="text" id="ocr-supplier-address" value="${inv.supplier_address || ''}" placeholder="Dirección del proveedor" class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-700">
+              <input type="text" id="ocr-supplier-address" ${this.editingPurchase ? 'readonly' : ''} value="${escapeHtml(inv.supplier_address)}" placeholder="Dirección del proveedor" class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-700">
             </div>
           </div>
 
@@ -479,7 +516,7 @@ export const OcrFacturasView = {
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° de Factura / Comprobante</label>
-                <input type="text" id="ocr-invoice-number" value="${inv.invoice_number || ''}" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-mono font-black text-blue-900">
+                <input type="text" id="ocr-invoice-number" value="${escapeHtml(inv.invoice_number)}" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-mono font-black text-blue-900">
               </div>
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Emisión</label>
@@ -551,14 +588,15 @@ export const OcrFacturasView = {
                     <td class="py-2.5 px-2 text-center text-slate-400 font-mono font-bold">${idx + 1}</td>
                     
                     <td class="py-2.5 px-2">
-                      <input type="text" data-idx="${idx}" data-field="code" value="${row.code || ''}" placeholder="Cód/SKU" class="ocr-row-input w-full px-1.5 py-1 bg-white border border-slate-300 rounded text-xs font-mono font-bold text-blue-900">
+                      <input type="text" data-idx="${idx}" data-field="code" value="${escapeHtml(row.code)}" placeholder="Cód/SKU" class="ocr-row-input w-full px-1.5 py-1 bg-white border border-slate-300 rounded text-xs font-mono font-bold text-blue-900">
                     </td>
 
                     <td class="py-2.5 px-3">
-                      <input type="text" data-idx="${idx}" data-field="commercial_name" value="${row.commercialName || ''}" placeholder="Nombre de venta individual" class="ocr-row-input w-full px-2 py-1 bg-white border border-slate-300 rounded font-extrabold text-slate-900 text-xs mb-0.5">
-                      <div class="text-[10px] text-slate-400 truncate max-w-xs" title="${row.rawDesc}">
-                        Facturado: ${row.rawDesc}
-                      </div>
+                      <input type="text" data-idx="${idx}" data-field="commercial_name" value="${escapeHtml(row.commercialName)}" placeholder="Nombre de venta individual" class="ocr-row-input w-full px-2 py-1 bg-white border border-slate-300 rounded font-extrabold text-slate-900 text-xs mb-0.5">
+                      ${this.editingPurchase ? `<input type="text" data-idx="${idx}" data-field="description" value="${escapeHtml(row.rawDesc)}" aria-label="Descripción facturada" class="ocr-row-input w-full rounded border border-slate-300 px-2 py-1 text-xs">` : `
+                      <div class="text-[10px] text-slate-400 truncate max-w-xs" title="${escapeHtml(row.rawDesc)}">
+                        Facturado: ${escapeHtml(row.rawDesc)}
+                      </div>`}
                     </td>
 
                     <td class="py-2.5 px-2">
@@ -671,14 +709,16 @@ export const OcrFacturasView = {
           <!-- Barra Inferior de Acción y Confirmación -->
           <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-800">
             <div class="text-xs text-slate-400">
-              <span>El inventario aumentará en <strong>unidades de venta individual</strong> (bidones, botellas, unidades).</span>
+              ${this.editingPurchase ? `<label for="ocr-edit-reason">Motivo de la corrección</label>
+                <input id="ocr-edit-reason" value="${escapeHtml(this.editReason)}" maxlength="500" class="ml-2 rounded border p-1 text-slate-900">
+                <p>El stock se ajusta por la diferencia de cantidades.</p>` : `<span>El inventario aumentará en <strong>unidades de venta individual</strong> (bidones, botellas, unidades).</span>`}
             </div>
             <div class="flex items-center gap-3">
               <button id="btn-confirm-ocr-purchase" ${this.ocrRequiresReview || !inv.items?.length ? 'disabled title="Lectura incompleta: falta identificar y validar los productos"' : ''}
                 
                 class="px-5 py-2.5 ${this.ocrRequiresReview || !inv.items?.length ? 'opacity-40 cursor-not-allowed ' : ''}${reconciliation.status === 'DIFERENCIA' ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'} font-black rounded-xl text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2">
                 <i data-lucide="${reconciliation.status === 'DIFERENCIA' ? 'alert-triangle' : 'check-circle'}" class="w-4 h-4"></i>
-                ${reconciliation.status === 'DIFERENCIA' ? 'Confirmar compra con diferencia e ingresar stock' : 'Confirmar compra e ingresar stock'}
+                ${this.editingPurchase ? 'Guardar cambios' : reconciliation.status === 'DIFERENCIA' ? 'Confirmar compra con diferencia e ingresar stock' : 'Confirmar compra e ingresar stock'}
               </button>
             </div>
           </div>
@@ -1090,6 +1130,7 @@ export const OcrFacturasView = {
 
   syncHeaderInputs() {
     if (!this.extractedInvoice) return;
+    this.editReason = document.getElementById('ocr-edit-reason')?.value ?? this.editReason;
     const getVal = (id) => document.getElementById(id)?.value;
     if (getVal('ocr-supplier-name') !== undefined) this.extractedInvoice.supplier_name = getVal('ocr-supplier-name');
     if (getVal('ocr-supplier-cuit') !== undefined) this.extractedInvoice.supplier_cuit = getVal('ocr-supplier-cuit');
@@ -1114,7 +1155,62 @@ export const OcrFacturasView = {
     }
   },
 
+  async saveEditedPurchase() {
+    if (this.confirmingPurchase) return;
+    const purchase = this.editingPurchase;
+    const invoice = this.extractedInvoice;
+    this.syncHeaderInputs();
+    const button = document.getElementById('btn-confirm-ocr-purchase');
+    this.confirmingPurchase = true;
+    button.disabled = true;
+    try {
+      const reason = this.editReason.trim();
+      if (reason.length < 5) throw Error('Ingresá un motivo de al menos 5 caracteres.');
+      if (!invoice.invoice_number?.trim() || !invoice.date) throw Error('Ingresá el número y la fecha del comprobante.');
+      const products = db.getProducts();
+      let gross = 0;
+      const lines = invoice.items.map(item => {
+        const matches = products.filter(product => String(product.sku).trim().toUpperCase() === String(item.code).trim().toUpperCase());
+        if (matches.length !== 1) throw Error('Seleccioná un SKU existente y único: ' + (item.code || '(vacío)'));
+        const product = matches[0];
+        const boxes = Number(item.boxes_count), units = Number(item.units_per_box);
+        const price = Number(item.unit_price), discount = Number(item.discount_pct);
+        if (![boxes,units].every(value => Number.isInteger(value) && value > 0)
+          || !Number.isFinite(price) || price < 0 || discount < 0 || discount > 100) {
+          throw Error('Revisá cantidades, precio y descuento en ' + item.code);
+        }
+        const totals = PackagingEngine.calculate({boxesCount:boxes,unitsPerBox:units,pricingMode:item.pricing_mode,rawUnitPrice:price,discountPct:discount});
+        gross += totals.lineSubtotalBruto;
+        const original = purchase.items[item.originalIndex];
+        if (original?.aromas?.length && original.product_id !== product.id) {
+          throw Error('Quitá primero el reparto de aromas si necesitás cambiar el SKU.');
+        }
+        const {originalIndex, ...fields} = item;
+        return {...fields, product_id:product.id, code:product.sku,
+          invoice_description:item.description, quantity_base:boxes*units, line_total:totals.lineNetTotal};
+      });
+      await window.comprasModule.callPurchaseRpc('stayclean_staff_edit_purchase', {
+        p_id:purchase.id,p_expected_items:purchase.items,p_expected_updated_at:purchase.updated_at ?? null,
+        p_header:{invoice_number:invoice.invoice_number,date:invoice.date,payment_condition:invoice.payment_condition,
+          cae:invoice.cae,discount_pct:Number(invoice.discount_pct || 0),subtotal_bruto:gross,
+          vat_included:invoice.vat_included !== false,vat_rate:Number(invoice.vat_rate || 21),
+          total_logistics:Number(invoice.total_logistics || 0),invoice_stated_total:Number(invoice.invoice_stated_total || 0),reason},
+        p_lines:lines
+      });
+      this.editingPurchase = null;
+      this.extractedInvoice = null;
+      await window.comprasModule.reloadAfterPurchaseChange();
+      notify('Factura actualizada.','success');
+    } catch (error) {
+      notify('No se pudo editar: '+error.message,'error');
+    } finally {
+      this.confirmingPurchase = false;
+      button.disabled = false;
+    }
+  },
+
   async confirmExtractedPurchase() {
+    if (this.editingPurchase) return this.saveEditedPurchase();
     if(!this.extractedInvoice)return;
     this.syncHeaderInputs();
     const inv=this.extractedInvoice;
