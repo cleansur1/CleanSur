@@ -1345,6 +1345,7 @@ export const ComprasView = {
     form.className = 'mt-4 space-y-3 rounded-lg border border-slate-200 p-3';
     form.innerHTML = `
       <h3 class="font-bold">${escapeHtml(line.product_name || 'Desinfectante SYS')}</h3>
+      <p class="text-sm text-slate-600">Escribí cada aroma y cuántas unidades corresponden. Podés dejar parte sin identificar.</p>
       <div data-aromas class="space-y-2"></div>
       <p data-balance class="text-sm" aria-live="polite"></p>
       <p data-error class="text-sm text-rose-700" role="alert"></p>
@@ -1384,6 +1385,7 @@ export const ComprasView = {
       return input;
     };
     previous.forEach(addRow);
+    if (!previous.length) addRow({quantity});
     updateBalance();
     form.oninput = updateBalance;
     form.querySelector('[data-add]').onclick = () => { addRow().focus(); updateBalance(); };
@@ -1417,7 +1419,7 @@ export const ComprasView = {
       }
     };
     if (previous.length) submit.focus();
-    else form.querySelector('[data-add]').focus();
+    else list.querySelector('input[type="text"]').focus();
   },
 
   viewCentralPurchase(id) {

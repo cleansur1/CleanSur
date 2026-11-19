@@ -17,22 +17,26 @@ export const VentasView = {
   async renderSalesHistory(container) {
     const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY}=await import('../supabase_public.js');
     const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const token = window.app.centralReadOnly ? getAdminSession()?.access_token : sessionStorage.getItem('stayclean_staff_access_token');
-    if(token) {
-      try {
+    const token = getAdminSession()?.access_token;
+    if (!token) {
+      container.innerHTML = '<p class="rounded-xl bg-white p-5">Ingresá al ERP de CleanSur para consultar las ventas en línea.</p>';
+      return;
+    }
+    try {
         const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_sales_history', {
           method: 'POST',
           headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
           body: '{}'
         });
         const rows = await response.json();
-        if (!response.ok || !Array.isArray(rows)) throw Error('No se pudo consultar el historial');
+        if (response.status === 401 || response.status === 403) throw Error('La sesión de CleanSur venció o perdió acceso. Volvé a ingresar al ERP.');
+        if (!response.ok || !Array.isArray(rows)) throw Error('No se pudo cargar el historial.');
         const cards = rows.map(row => {
           const items = Array.isArray(row.items) ? row.items : [];
           return `
             <details class="border-b border-slate-200 py-3">
               <summary class="cursor-pointer font-medium">
-                ${esc(row.number)} · ${esc(row.channel)} · ${esc(row.customer)} · ${Formatter.money(Number(row.total))}
+                Comprobante ${esc(row.number)} · ${esc(row.channel)} · ${esc(row.customer)} · ${Formatter.money(Number(row.total))}
               </summary>
               <div class="mt-3 space-y-2 pl-4 text-sm">
                 <p>${Formatter.date(row.created_at)} · ${esc(row.payment_method)} · ${esc(row.payment_status || row.status)}</p>
@@ -45,15 +49,11 @@ export const VentasView = {
         }).join('');
         container.innerHTML = '<section class="rounded-xl border border-slate-200 bg-white p-5"><h2 class="mb-2 font-bold">Historial de ventas y pedidos</h2>' +
           (cards || '<p>Todavía no hay ventas o pedidos registrados.</p>') + '</section>';
-        return;
-      } catch(e) {sessionStorage.removeItem('stayclean_staff_access_token');}
+    } catch (error) {
+      container.innerHTML = '<section class="rounded-xl border bg-white p-5"><p role="alert"></p><button type="button" data-retry-sales class="mt-2 text-blue-700 underline">Reintentar</button></section>';
+      container.querySelector('[role="alert"]').textContent = error.message;
+      container.querySelector('[data-retry-sales]').onclick = () => this.renderSalesHistory(container);
     }
-    container.innerHTML='<section class="bg-white p-6 rounded-xl"><h2 class="font-bold mb-2">Iniciar sesión de personal Supabase</h2><form id="stayclean-login"><input class="border p-2 m-1" name="email" type="email" placeholder="Email" required><input class="border p-2 m-1" name="password" type="password" placeholder="Contraseña" required><button class="bg-blue-800 text-white p-2 rounded" type="submit">Ingresar</button></form><p id="stayclean-login-error"></p></section>';
-    container.querySelector('#stayclean-login').onsubmit=async e=>{
-      e.preventDefault();const d=new FormData(e.target);
-      try {const r=await fetch(STAYCLEAN_SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:d.get('email'),password:d.get('password')})});const x=await r.json();if(!r.ok||!x.access_token)throw Error('Ingreso inválido');sessionStorage.setItem('stayclean_staff_access_token',x.access_token);await this.renderSalesHistory(container);}
-      catch(err){container.querySelector('#stayclean-login-error').textContent='No se pudo autenticar al personal autorizado';}
-    };
   },
   render(container, params = {}) {
     const isNew = params.action === 'new';
@@ -88,7 +88,7 @@ export const VentasView = {
       <div class="space-y-6 animate-fade-in">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <div>
-            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Registro de Ventas & Comprobantes</h1><button onclick="window.app.navigate(&quot;ventas&quot;, {action: &quot;online&quot;})" class="text-blue-700 underline text-sm">Pedidos online / iniciar sesión</button>
+            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Registro de Ventas & Comprobantes</h1><button onclick="window.app.navigate(&quot;ventas&quot;, {action: &quot;online&quot;})" class="text-blue-700 underline text-sm">Historial de pedidos</button>
             <p class="text-xs text-slate-500">Historial de ventas comerciales, facturación y control de márgenes.</p>
           </div>
           <button onclick="window.app.navigate('ventas', { action: 'new' })" class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow-sm transition">
@@ -665,7 +665,7 @@ window.ventasModule = {
     try {
       if (discountPct !== 0) throw Error('Los descuentos requieren validación y todavía no están habilitados en la venta central.');
       const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY}=await import('../supabase_public.js');
-      const token = window.app.centralReadOnly ? getAdminSession()?.access_token : sessionStorage.getItem('stayclean_staff_access_token');
+      const token = getAdminSession()?.access_token;
       if (!token) throw Error('Iniciá sesión de personal desde Ventas antes de registrar una venta.');
       const requestId=this.pendingPosId||(this.pendingPosId=crypto.randomUUID());
       const response=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/stayclean_staff_record_sale',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_sale:{request_id:requestId,customer_name:selectedCustomer?.name||'Consumidor Final',payment_method:payMethod,notes,items:cartItems.map(it=>({product_id:it.product_id||it.id,quantity:it.quantity}))}})});

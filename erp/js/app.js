@@ -3,8 +3,8 @@ import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=8.1';
-import { VentasView } from './views/ventas.js?v=8.2';
-import { ComprasView } from './views/compras.js?v=13.8';
+import { VentasView } from './views/ventas.js?v=8.3';
+import { ComprasView } from './views/compras.js?v=13.9';
 import { ProductosView } from './views/productos.js?v=7.0';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
@@ -367,7 +367,7 @@ async function bootCentralReadOnly() {
   const shield = document.createElement('div');
   shield.id = 'central-access';
   shield.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f1f5f9;display:grid;place-items:center;font-family:system-ui';
-  shield.innerHTML = '<form id="central-form" style="background:white;border-radius:16px;padding:32px;max-width:410px;width:90%;box-shadow:0 10px 35px #0002"><h2 style="font-size:23px;font-weight:800;color:#0e3a6b">StayClean · ERP original</h2><p style="margin:12px 0;color:#475569">Inventario central de Supabase · 39 productos registrados · Ingresá para verlos</p><input name="email" type="email" autocomplete="username" required placeholder="Correo" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><input name="password" type="password" autocomplete="current-password" required placeholder="Contraseña" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><button style="background:#0e3a6b;color:white;padding:12px;border-radius:8px;width:100%;margin-top:12px">Ingresar</button><p id="central-error" role="alert" style="color:#b91c1c;margin-top:12px"></p></form>';
+  shield.innerHTML = '<form id="central-form" style="background:white;border-radius:16px;padding:32px;max-width:410px;width:90%;box-shadow:0 10px 35px #0002"><h2 style="font-size:23px;font-weight:800;color:#0e3a6b">CleanSur · Acceso al ERP</h2><p style="margin:12px 0;color:#475569">Ingresá con tu cuenta de CleanSur para acceder a ventas, compras e inventario.</p><input name="email" type="email" autocomplete="username" required placeholder="Correo" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><input name="password" type="password" autocomplete="current-password" required placeholder="Contraseña" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><button style="background:#0e3a6b;color:white;padding:12px;border-radius:8px;width:100%;margin-top:12px">Ingresar</button><p id="central-error" role="alert" style="color:#b91c1c;margin-top:12px"></p></form>';
   document.body.append(shield);
   document.getElementById('stayclean-boot-status')?.remove();
   document.getElementById('central-form').addEventListener('submit', async event => {
@@ -436,20 +436,21 @@ async function bootCentralReadOnly() {
           );
           const purchaseControl = app.currentRoute === 'compras' && (
             /^window\.comprasModule\.(viewCentralPurchase|editCentralPurchase|cancelPurchase|setSupplierFilter|clearFilters)\(/.test(handler) ||
-            control.matches('#centralPurchaseDetailModal .close-purchase-detail')
+            control.matches('#centralPurchaseDetailModal .close-purchase-detail, #centralPurchaseDetailModal [data-edit-aromas]') ||
+            control.closest('#centralPurchaseDetailModal [data-aroma-editor] form')
           );
           const priceControl = app.currentRoute === 'productos' && handler.includes('window.productosModule.changeCentralPrice(');
           const purchaseOrderControl = app.currentRoute === 'ordenes_compra' &&
             (control.matches('#newPurchaseOrder') || control.closest('#purchaseOrderDialog'));
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
-            (control.matches('[data-new-sale], #btnConfirmSale') ||
+            (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale') ||
               handler.startsWith('window.ventasModule.removeFromCart('));
           if (salesControl || purchaseOrderControl || safeNavigation || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
-          alert('Esta operación todavía no está habilitada para guardar en Supabase.');
+          alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }
       }, true);
-      document.addEventListener('submit', e => { if ((e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
+      document.addEventListener('submit', e => { if ((e.target.matches('#centralPurchaseDetailModal [data-aroma-editor] form') && app.currentRoute==='compras') || (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
     } catch (err) {
       error.textContent = err.message || 'No se pudo iniciar la sesión';
       await signOutAdmin().catch(()=>{});
@@ -457,7 +458,8 @@ async function bootCentralReadOnly() {
   });
 }
 function boot() {
-  if (new URLSearchParams(location.search).get('central') === '1') {
+  const mode = new URLSearchParams(location.search).get('central');
+  if (mode === '1' || (mode !== '0' && location.hostname === 'fedeeumann.github.io')) {
     bootCentralReadOnly();
   } else {
     document.getElementById('stayclean-boot-status')?.remove();
