@@ -1307,11 +1307,15 @@ export const ComprasView = {
   },
 
   async centralPurchaseRpc(action,id,changes={}) {
+    return this.callPurchaseRpc('stayclean_staff_manage_purchase',{p_purchase_id:id,p_action:action,p_changes:changes});
+  },
+
+  async callPurchaseRpc(name, args) {
     const {getAdminSession}=await import('../supabase_admin.js');
     const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
     const token=getAdminSession()?.access_token;
     if(!token)throw Error('Iniciá sesión nuevamente en CleanSur');
-    const response=await fetch(base+'/rest/v1/rpc/stayclean_staff_manage_purchase',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_purchase_id:id,p_action:action,p_changes:changes})});
+    const response=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(args)});
     const result=await response.json().catch(()=>({}));
     if(!response.ok)throw Error(result.message||'No se pudo guardar en Supabase');
     return result;
@@ -1333,6 +1337,89 @@ export const ComprasView = {
     }
   },
 
+  editPurchaseAromas(purchase, index, container, button) {
+    const line = purchase.items[index];
+    const previous = Array.isArray(line.aromas) ? line.aromas : [];
+    const quantity = Number(line.quantity_base);
+    const form = document.createElement('form');
+    form.className = 'mt-4 space-y-3 rounded-lg border border-slate-200 p-3';
+    form.innerHTML = `
+      <h3 class="font-bold">${escapeHtml(line.product_name || 'Desinfectante SYS')}</h3>
+      <div data-aromas class="space-y-2"></div>
+      <p data-balance class="text-sm" aria-live="polite"></p>
+      <p data-error class="text-sm text-rose-700" role="alert"></p>
+      <div class="flex flex-wrap gap-3">
+        <button type="button" data-add class="text-blue-700 font-semibold">+ Agregar aroma</button>
+        <button type="submit" class="rounded bg-blue-700 px-3 py-1.5 text-white">Guardar aromas</button>
+        <button type="button" data-cancel>Cancelar</button>
+      </div>`;
+    container.replaceChildren(form);
+    const list = form.querySelector('[data-aromas]');
+    const balance = form.querySelector('[data-balance]');
+    const error = form.querySelector('[data-error]');
+    const submit = form.querySelector('[type="submit"]');
+    const read = () => Array.from(list.children, row => ({
+      name: row.querySelector('input[type="text"]').value.trim(),
+      quantity: Number(row.querySelector('input[type="number"]').value)
+    }));
+    const updateBalance = () => {
+      const assigned = read().reduce((total, entry) => total + entry.quantity, 0);
+      balance.textContent = assigned > quantity
+        ? `El reparto supera lo recibido por ${assigned - quantity} unidades.`
+        : `${quantity - assigned} de ${quantity} unidades sin identificar.`;
+      return assigned;
+    };
+    const addRow = ({name = '', quantity: count = 1} = {}) => {
+      const row = document.createElement('div');
+      row.className = 'flex flex-wrap items-center gap-2';
+      row.innerHTML = `
+        <input type="text" aria-label="Aroma" placeholder="Aroma" required maxlength="80" class="rounded border border-slate-300 px-2 py-1">
+        <input type="number" aria-label="Unidades" required min="1" step="1" class="w-24 rounded border border-slate-300 px-2 py-1">
+        <button type="button" class="text-rose-700">Quitar</button>`;
+      const [input, units] = row.querySelectorAll('input');
+      input.value = name;
+      units.value = count;
+      row.querySelector('button').onclick = () => { row.remove(); updateBalance(); };
+      list.append(row);
+      return input;
+    };
+    previous.forEach(addRow);
+    updateBalance();
+    form.oninput = updateBalance;
+    form.querySelector('[data-add]').onclick = () => { addRow().focus(); updateBalance(); };
+    form.querySelector('[data-cancel]').onclick = () => { form.remove(); button.focus(); };
+    form.onsubmit = async event => {
+      event.preventDefault();
+      error.textContent = '';
+      if (updateBalance() > quantity) {
+        error.textContent = 'Revisá las cantidades antes de guardar.';
+        return;
+      }
+      const aromas = read();
+      const controls = Array.from(form.elements);
+      controls.forEach(control => { control.disabled = true; });
+      container.closest('#centralPurchaseDetailModal').querySelectorAll('[data-edit-aromas]')
+        .forEach(control => { control.disabled = true; });
+      try {
+        line.aromas = await this.callPurchaseRpc('stayclean_staff_set_purchase_aromas', {
+          p_purchase_id: purchase.id, p_line_index: index, p_product_id: line.product_id,
+          p_quantity: quantity, p_previous: previous, p_aromas: aromas
+        });
+        container.closest('#centralPurchaseDetailModal').remove();
+        await this.reloadAfterPurchaseChange();
+        this.viewCentralPurchase(purchase.id);
+      } catch (failure) {
+        error.textContent = failure.message;
+      } finally {
+        controls.forEach(control => { control.disabled = false; });
+        container.closest('#centralPurchaseDetailModal')?.querySelectorAll('[data-edit-aromas]')
+          .forEach(control => { control.disabled = false; });
+      }
+    };
+    if (previous.length) submit.focus();
+    else form.querySelector('[data-add]').focus();
+  },
+
   viewCentralPurchase(id) {
     const p=db.getPurchases().find(p=>String(p.id)===String(id));
     if(!p)return alert('Comprobante no encontrado');
@@ -1340,13 +1427,27 @@ export const ComprasView = {
     const modal=document.createElement('div');
     modal.id='centralPurchaseDetailModal';
     modal.className='fixed inset-0 z-[100] bg-slate-950/60 flex items-center justify-center p-4';
+    const sysIds = new Set(db.getProducts()
+      .filter(product => ['2000107', '2000086'].includes(String(product.sku)))
+      .map(product => product.id));
+    const aromaCell = (item, index) => {
+      if (!sysIds.has(item.product_id) || !Number.isInteger(Number(item.quantity_base))) return '';
+      const aromas = Array.isArray(item.aromas) ? item.aromas : [];
+      const detail = aromas.map(entry => `${entry.name} × ${entry.quantity}`).join(' · ');
+      return `<div class="text-xs text-slate-600">${escapeHtml(detail || 'Aromas sin identificar')}</div>
+        ${['RECIBIDA', 'CONFIRMADA'].includes(p.status) ? `<button type="button" data-edit-aromas="${index}" class="font-semibold text-blue-700">Editar aromas</button>` : ''}`;
+    };
     modal.innerHTML=`<div class="bg-white rounded-xl shadow-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-auto">
       <div class="flex justify-between items-center mb-4"><h2 class="font-bold text-xl">Comprobante ${esc(p.invoice_number)}</h2><button class="close-purchase-detail text-xl" aria-label="Cerrar">✕</button></div>
       <p><b>Proveedor:</b> ${esc(p.supplier_name)} · <b>Fecha:</b> ${esc(p.date)} · <b>Estado:</b> ${esc(p.status)}</p>
       <p class="mt-2"><b>Total:</b> ${Formatter.money(p.total_final)}</p>
       <div class="overflow-x-auto mt-4"><table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="p-2 text-left">SKU</th><th class="p-2 text-left">Producto</th><th class="p-2 text-right">Unidades</th><th class="p-2 text-right">Importe</th></tr></thead>
-      <tbody>${(p.items||[]).map(it=>`<tr class="border-b"><td class="p-2">${esc(it.code||it.sku)}</td><td class="p-2">${esc(it.product_name||it.commercial_name||it.description)}</td><td class="p-2 text-right">${esc(it.quantity_base??it.quantity??'')}</td><td class="p-2 text-right">${Formatter.money(it.line_total??it.subtotal??0)}</td></tr>`).join('')}</tbody></table></div>
+      <tbody>${(p.items||[]).map((it,index)=>`<tr class="border-b"><td class="p-2">${esc(it.code||it.sku)}</td><td class="p-2">${esc(it.product_name||it.commercial_name||it.description)}${aromaCell(it,index)}</td><td class="p-2 text-right">${esc(it.quantity_base??it.quantity??'')}</td><td class="p-2 text-right">${Formatter.money(it.line_total??it.subtotal??0)}</td></tr>`).join('')}</tbody></table></div>
+      <div data-aroma-editor></div>
       <p class="text-xs text-slate-500 mt-4">Detalle registrado en Supabase. El archivo original solo puede visualizarse cuando esté adjuntado al comprobante.</p></div>`;
+    modal.querySelectorAll('[data-edit-aromas]').forEach(button => {
+      button.onclick = () => this.editPurchaseAromas(p, Number(button.dataset.editAromas), modal.querySelector('[data-aroma-editor]'), button);
+    });
     modal.querySelector('.close-purchase-detail').onclick=()=>modal.remove();
     modal.onclick=e=>{if(e.target===modal)modal.remove();};
     document.body.append(modal);
