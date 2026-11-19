@@ -16,7 +16,7 @@ class TiendaStandaloneApp {
       search: '',
       sort: 'featured'
     };
-    this.companyWhatsApp = '5492942498120'; // WhatsApp de StayClean Caviahue
+    this.companyWhatsApp = '5492942487227'; // WhatsApp de StayClean Caviahue
   }
 
   init() {
@@ -903,6 +903,13 @@ class TiendaStandaloneApp {
     const result = params.get('mp');
     const requestId = params.get('request_id');
     if (!result || !requestId) return;
+    const notice = document.createElement('section');
+    notice.setAttribute('role', 'status');
+    notice.className = 'mx-auto my-4 max-w-5xl rounded-lg border border-slate-300 bg-white p-4 text-slate-900';
+    notice.textContent = 'Estamos verificando tu pago…';
+    document.body.prepend(notice);
+    const showNotice = message => { notice.textContent = message; };
+    let resolved = false;
     try {
       // The buyer may return before Mercado Pago delivers the signed webhook.
       // Never treat the return URL itself as proof of payment.
@@ -913,6 +920,7 @@ class TiendaStandaloneApp {
           status = await staycleanMpCheckoutStatus(requestId);
         }
       }
+      resolved = !['pending', 'fulfillment_review'].includes(status.status);
       if (status.status === 'approved') {
         this.cart = [];
         this.saveCart();
@@ -921,22 +929,23 @@ class TiendaStandaloneApp {
         sessionStorage.removeItem('stayclean_qa_pending_mp_order_id');
         sessionStorage.removeItem('stayclean_qa_pending_mp_cart');
         await this.loadProducts();
-        alert('¡Pago aprobado! Pedido ' + status.order_number + ' registrado correctamente en StayClean.');
+        showNotice('¡Pago aprobado! Pedido ' + status.order_number + ' registrado correctamente en StayClean.');
       } else if (status.status === 'pending' || status.status === 'fulfillment_review') {
         if (status.status === 'fulfillment_review') {
-          alert('Tu pago fue acreditado, pero el pedido requiere revisión manual de stock. No vuelvas a pagar. Contactá a StayClean e indicá el identificador ' + requestId + '.');
+          showNotice('Tu pago fue acreditado, pero el pedido requiere revisión manual de stock. No vuelvas a pagar. Contactá a StayClean e indicá el identificador ' + requestId + '.');
         } else {
-          alert('El pago todavía está pendiente de confirmación. No vuelvas a pagar; podés consultar el estado desde tu cuenta.');
+          showNotice('El pago todavía está pendiente de confirmación. No vuelvas a pagar. Recargá esta página para consultar nuevamente.');
         }
       } else {
         sessionStorage.removeItem('stayclean_qa_pending_mp_order_id');
         sessionStorage.removeItem('stayclean_qa_pending_mp_cart');
-        alert('El pago no figura aprobado. Tu carrito se conserva para que puedas volver a intentarlo.');
+        showNotice('El pago no figura aprobado. Tu carrito se conserva para que puedas volver a intentarlo.');
       }
     } catch (error) {
       console.error('No se pudo consultar el retorno de Mercado Pago', error);
-      alert('Volviste de Mercado Pago, pero todavía no pudimos verificar el estado. No vuelvas a pagar; consultá tus pedidos en tu cuenta.');
-    } finally {
+      showNotice('Volviste de Mercado Pago, pero todavía no pudimos verificar el estado. No vuelvas a pagar. Si se cerró tu sesión, volvé a ingresar y recargá esta página.');
+    }
+    if (resolved) {
       params.delete('mp');
       params.delete('request_id');
       const query = params.toString();
