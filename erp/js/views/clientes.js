@@ -2,6 +2,8 @@
 // Directorio de clientes, métricas de compra, límites de crédito y tipos de clientes.
 
 import { db } from '../db.js';
+import { getAdminSession } from '../supabase_admin.js';
+import { STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from '../supabase_public.js';
 import { Formatter } from '../models.js';
 
 export const ClientesView = {
@@ -19,6 +21,36 @@ export const ClientesView = {
       this.renderCustomerDetail(container, db.getCustomer(viewId));
     } else {
       this.renderCustomerList(container, customers);
+      this.renderStoreAccounts(container.querySelector('[data-store-accounts]'));
+    }
+  },
+
+  async renderStoreAccounts(section) {
+    const token = getAdminSession()?.access_token || sessionStorage.getItem('stayclean_staff_access_token');
+    const list = section.querySelector('ul');
+    const status = section.querySelector('[role=status]');
+    if (!token) {
+      status.textContent = 'Entrá al ERP en la nube con tu cuenta de personal para ver las cuentas de la tienda.';
+      return;
+    }
+    try {
+      const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_store_accounts', {
+        method: 'POST',
+        headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      const accounts = await response.json();
+      if (!response.ok || !Array.isArray(accounts)) throw Error('No se pudieron consultar las cuentas.');
+      status.textContent = accounts.length ? '' : 'Todavía no hay cuentas registradas.';
+      for (const account of accounts) {
+        const row = document.createElement('li');
+        row.className = 'border-t border-slate-200 py-2 text-sm';
+        row.textContent = [account.name, account.email, account.confirmed ? 'Correo confirmado' : 'Correo pendiente',
+          account.customer_id ? 'Perfil vinculado' : 'Perfil pendiente', account.qa ? 'Cuenta de prueba' : null].filter(Boolean).join(' · ');
+        list.append(row);
+      }
+    } catch {
+      status.textContent = 'No se pudieron consultar las cuentas. Volvé a ingresar al ERP e intentá nuevamente.';
     }
   },
 
@@ -34,6 +66,12 @@ export const ClientesView = {
             <i data-lucide="user-plus" class="w-4 h-4"></i> + Nuevo Cliente
           </button>
         </div>
+
+        <section data-store-accounts class="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 class="mb-2 font-bold">Cuentas de la tienda</h2>
+          <p role="status" class="text-sm text-slate-600">Cargando cuentas…</p>
+          <ul></ul>
+        </section>
 
         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
           <div class="relative w-full md:w-80">
