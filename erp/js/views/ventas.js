@@ -2,6 +2,7 @@
 // Cálculo en vivo, descuentos, listas de precios, unidades/conversiones, descuento automático de stock y anulación.
 
 import { db } from '../db.js';
+import { getAdminSession } from '../supabase_admin.js';
 import { Formatter } from '../models.js';
 import { PedidosView } from './pedidos.js?v=6.0';
 
@@ -16,7 +17,7 @@ export const VentasView = {
   async renderSalesHistory(container) {
     const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY}=await import('../supabase_public.js');
     const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const token=sessionStorage.getItem('stayclean_staff_access_token');
+    const token = window.app.centralReadOnly ? getAdminSession()?.access_token : sessionStorage.getItem('stayclean_staff_access_token');
     if(token) {
       try {
         const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_sales_history', {
@@ -664,7 +665,7 @@ window.ventasModule = {
     try {
       if (discountPct !== 0) throw Error('Los descuentos requieren validación y todavía no están habilitados en la venta central.');
       const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY}=await import('../supabase_public.js');
-      const token=sessionStorage.getItem('stayclean_staff_access_token');
+      const token = window.app.centralReadOnly ? getAdminSession()?.access_token : sessionStorage.getItem('stayclean_staff_access_token');
       if (!token) throw Error('Iniciá sesión de personal desde Ventas antes de registrar una venta.');
       const requestId=this.pendingPosId||(this.pendingPosId=crypto.randomUUID());
       const response=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/stayclean_staff_record_sale',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_sale:{request_id:requestId,customer_name:selectedCustomer?.name||'Consumidor Final',payment_method:payMethod,notes,items:cartItems.map(it=>({product_id:it.product_id||it.id,quantity:it.quantity}))}})});
