@@ -459,7 +459,7 @@ async function bootCentralReadOnly() {
 }
 function boot() {
   const mode = new URLSearchParams(location.search).get('central');
-  if (mode === '1' || (mode !== '0' && location.hostname === 'fedeeumann.github.io')) {
+  if (mode === '1' || (mode !== '0' && ['fedeeumann.github.io', 'cleansur1.github.io'].includes(location.hostname))) {
     bootCentralReadOnly();
   } else {
     document.getElementById('stayclean-boot-status')?.remove();
