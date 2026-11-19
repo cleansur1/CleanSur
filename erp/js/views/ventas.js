@@ -3,6 +3,7 @@
 
 import { db } from '../db.js';
 import { Formatter } from '../models.js';
+import { PedidosView } from './pedidos.js?v=6.0';
 
 let cartItems = [];
 let selectedCustomer = null;
@@ -12,26 +13,48 @@ let paymentMethod = 'Efectivo';
 let saleNotes = '';
 
 export const VentasView = {
-  async renderCentralOrders(container) {
-    const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY,staycleanStaffOrders}=await import('../supabase_public.js');
+  async renderSalesHistory(container) {
+    const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY}=await import('../supabase_public.js');
     const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const token=sessionStorage.getItem('stayclean_staff_access_token');
     if(token) {
       try {
-        const rows=await staycleanStaffOrders(token);
-        if(!Array.isArray(rows))throw Error('No autorizado');
-        container.innerHTML='<section class="bg-white p-6 rounded-xl"><h2 class="font-bold text-xl">Pedidos online centrales</h2><p class="text-sm mb-3">Supabase · stock descontado al confirmar</p>'+(rows.length?rows.map(o=>'<div class="border-b p-2">'+esc(o.number)+' · '+esc(o.customer)+' · '+esc(o.city)+' · $'+Number(o.total).toLocaleString('es-AR')+' · '+esc(o.status)+'</div>').join(''):'<p>No hay pedidos registrados.</p>')+'</section>';return;
+        const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_sales_history', {
+          method: 'POST',
+          headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        const rows = await response.json();
+        if (!response.ok || !Array.isArray(rows)) throw Error('No se pudo consultar el historial');
+        const cards = rows.map(row => {
+          const items = Array.isArray(row.items) ? row.items : [];
+          return `
+            <details class="border-b border-slate-200 py-3">
+              <summary class="cursor-pointer font-medium">
+                ${esc(row.number)} · ${esc(row.channel)} · ${esc(row.customer)} · ${Formatter.money(Number(row.total))}
+              </summary>
+              <div class="mt-3 space-y-2 pl-4 text-sm">
+                <p>${Formatter.date(row.created_at)} · ${esc(row.payment_method)} · ${esc(row.payment_status || row.status)}</p>
+                ${items.length ? '<ul class="list-disc pl-5">' + items.map(item => `
+                  <li>${esc(item.quantity)} × ${esc(item.product_name || item.name || item.description || item.product_id)}
+                  ${item.unit_price == null ? '' : ' · ' + Formatter.money(Number(item.unit_price)) + ' por unidad'}</li>`).join('') + '</ul>' : '<p>Sin detalle de artículos.</p>'}
+                ${row.fiscal_reference ? '<p>Referencia ARCA: ' + esc(row.fiscal_reference) + '</p>' : ''}
+              </div>
+            </details>`;
+        }).join('');
+        container.innerHTML = '<section class="rounded-xl border border-slate-200 bg-white p-5"><h2 class="mb-2 font-bold">Historial de ventas y pedidos</h2>' +
+          (cards || '<p>Todavía no hay ventas o pedidos registrados.</p>') + '</section>';
+        return;
       } catch(e) {sessionStorage.removeItem('stayclean_staff_access_token');}
     }
     container.innerHTML='<section class="bg-white p-6 rounded-xl"><h2 class="font-bold mb-2">Iniciar sesión de personal Supabase</h2><form id="stayclean-login"><input class="border p-2 m-1" name="email" type="email" placeholder="Email" required><input class="border p-2 m-1" name="password" type="password" placeholder="Contraseña" required><button class="bg-blue-800 text-white p-2 rounded" type="submit">Ingresar</button></form><p id="stayclean-login-error"></p></section>';
     container.querySelector('#stayclean-login').onsubmit=async e=>{
       e.preventDefault();const d=new FormData(e.target);
-      try {const r=await fetch(STAYCLEAN_SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:d.get('email'),password:d.get('password')})});const x=await r.json();if(!r.ok||!x.access_token)throw Error('Ingreso inválido');sessionStorage.setItem('stayclean_staff_access_token',x.access_token);await this.renderCentralOrders(container);}
+      try {const r=await fetch(STAYCLEAN_SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:d.get('email'),password:d.get('password')})});const x=await r.json();if(!r.ok||!x.access_token)throw Error('Ingreso inválido');sessionStorage.setItem('stayclean_staff_access_token',x.access_token);await this.renderSalesHistory(container);}
       catch(err){container.querySelector('#stayclean-login-error').textContent='No se pudo autenticar al personal autorizado';}
     };
   },
   render(container, params = {}) {
-    if(params.action==='online'){this.renderCentralOrders(container);return;}
     const isNew = params.action === 'new';
     const sales = db.getSales();
     const customers = db.getCustomers();
@@ -41,7 +64,21 @@ export const VentasView = {
     if (isNew) {
       this.renderNewSale(container, customers, products, priceLists);
     } else {
-      this.renderSalesList(container, sales);
+      container.innerHTML = `
+        <section class="space-y-4">
+          <header class="flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-2xl font-bold">Ventas</h1>
+            <button type="button" data-new-sale class="rounded-lg bg-emerald-700 px-4 py-2 text-white">Nueva venta</button>
+          </header>
+          <div data-sales-history><p>Cargando ventas y pedidos…</p></div>
+          <details class="rounded-xl border border-slate-200 bg-white p-4"><summary class="cursor-pointer font-bold">Pedidos en preparación</summary><div class="mt-4" data-local-orders></div></details>
+          ${sales.length ? '<details class="rounded-xl border border-slate-200 bg-white p-4"><summary class="cursor-pointer font-bold">Ventas anteriores de este dispositivo</summary><div class="mt-4" data-local-sales></div></details>' : ''}
+        </section>`;
+      container.querySelector('[data-new-sale]').onclick = () => window.app.navigate('ventas', { action: 'new' });
+      const localSales = container.querySelector('[data-local-sales]');
+      if (localSales) this.renderSalesList(localSales, sales);
+      PedidosView.render(container.querySelector('[data-local-orders]'));
+      this.renderSalesHistory(container.querySelector('[data-sales-history]'));
     }
   },
 
@@ -628,7 +665,7 @@ window.ventasModule = {
       if (discountPct !== 0) throw Error('Los descuentos requieren validación y todavía no están habilitados en la venta central.');
       const {STAYCLEAN_SUPABASE_URL,STAYCLEAN_PUBLISHABLE_KEY}=await import('../supabase_public.js');
       const token=sessionStorage.getItem('stayclean_staff_access_token');
-      if (!token) throw Error('Iniciá sesión de personal desde Pedidos online antes de registrar una venta.');
+      if (!token) throw Error('Iniciá sesión de personal desde Ventas antes de registrar una venta.');
       const requestId=this.pendingPosId||(this.pendingPosId=crypto.randomUUID());
       const response=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/stayclean_staff_record_sale',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_sale:{request_id:requestId,customer_name:selectedCustomer?.name||'Consumidor Final',payment_method:payMethod,notes,items:cartItems.map(it=>({product_id:it.product_id||it.id,quantity:it.quantity}))}})});
       const sale=await response.json();
