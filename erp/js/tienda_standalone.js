@@ -18,7 +18,6 @@ class TiendaStandaloneApp {
       search: '',
       sort: 'featured'
     };
-    this.companyWhatsApp = '5492942487227'; // WhatsApp de StayClean Caviahue
   }
 
   init() {
@@ -835,7 +834,7 @@ class TiendaStandaloneApp {
     const mode=document.getElementById('checkoutPaymentMethod')?.value;
     if(mode==='Mercado Pago')return this.startMercadoPagoCheckout();
     if(!mode){alert('Seleccioná una forma de pago.');return;}
-    return this.submitOrderToWhatsApp();
+    return this.submitOfflineOrder();
   }
 
   async startMercadoPagoCheckout() {
@@ -972,19 +971,19 @@ class TiendaStandaloneApp {
         <div class="space-y-1.5">
           <label class="block font-bold text-slate-700">Forma de Pago:</label>
           <select id="checkoutPaymentMethod" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
+            <option value="Mercado Pago">Mercado Pago (integración en pruebas)</option>
             <option value="Efectivo contra entrega">Efectivo contra entrega en Caviahue</option>
             <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
-            <option value="Mercado Pago">Mercado Pago (integración en pruebas)</option>
             <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
           </select>
         </div>
 
-        <!-- Botón de Envío por WhatsApp -->
+        <!-- Confirmar forma de pago -->
         <div class="pt-3 border-t border-slate-100 space-y-2">
           <button onclick="window.tiendaApp.confirmSelectedPayment()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-[#0E3A6B] hover:bg-[#1E88E5] text-white shadow-md flex items-center justify-center gap-2">
-            <i data-lucide="check-circle" class="w-4 h-4"></i><span>Confirmar pedido con la forma de pago elegida</span>
+            <i data-lucide="check-circle" class="w-4 h-4"></i><span>Continuar con la forma de pago elegida</span>
           </button>
-          <p class="text-[10px] text-slate-500 text-center">Con Mercado Pago irás al pago online. Con otros medios se registrará el pedido y se abrirá WhatsApp para coordinar.</p>
+          <p class="text-[10px] text-slate-500 text-center">Mercado Pago te lleva al pago online de prueba. Las otras opciones registran el pedido para coordinar el pago.</p>
         </div>
 
       </div>
@@ -999,7 +998,7 @@ class TiendaStandaloneApp {
     if (modal) modal.classList.add('hidden');
   }
 
-  async submitOrderToWhatsApp() {
+  async submitOfflineOrder() {
     if (this.sendingOrder) return;
     const prof = this.customerProfile;
     if (!prof || !this.cart.length) return;
@@ -1017,16 +1016,13 @@ class TiendaStandaloneApp {
         delivery_city: city,
         items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
       });
-      const lines = this.cart.map(item => `• ${item.quantity}x ${item.name}`).join('\\n');
-      const message = `*PEDIDO STAYCLEAN*\\nN°: ${savedOrder.order_number}\\nCliente: ${prof.name}\\nTel: ${prof.phone}\\nEntrega: ${prof.address}, ${city}\\n${lines}\\nTotal: ${Formatter.money(Number(savedOrder.total || 0))}\\nPedido registrado; pendiente de coordinación.`;
       this.cart = [];
       this.saveCart();
       this.pendingRequestId = null;
       sessionStorage.removeItem('stayclean_pending_order_id');
       this.closeOrderConfirmation();
       await this.loadProducts();
-      window.open(`https://wa.me/${this.companyWhatsApp}?text=${encodeURIComponent(message)}`, '_blank');
-      alert(`Pedido ${savedOrder.order_number} registrado correctamente en StayClean. Podés consultar e imprimir tu comprobante desde Mi cuenta → PEDIDOS.`);
+      alert(`Pedido ${savedOrder.order_number} registrado en CleanSur. Podés ver el comprobante en Mi cuenta → Mis pedidos.`);
     } catch (error) {
       console.error('Error registrando pedido en Supabase', error);
       alert('No se registró el pedido: ' + error.message + '. El carrito permanece intacto.');
