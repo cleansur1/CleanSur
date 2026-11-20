@@ -509,7 +509,7 @@ class TiendaStandaloneApp {
                 <span>Seleccionar opciones</span>
               </button>
             ` : `
-              <button onclick="window.tiendaApp.addToCart('${p.id}', 1)" class="btn-stayclean w-full py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs">
+              <button onclick="window.tiendaApp.openProductModal('${p.id}')" class="btn-stayclean w-full py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                 <span>Agregar al carrito</span>
               </button>
@@ -533,6 +533,9 @@ class TiendaStandaloneApp {
     const modal = document.getElementById('productDetailModal');
     const content = document.getElementById('productDetailContent');
     if (!modal || !content) return;
+
+    const inCart = this.cart.find(item => item.id === p.id)?.quantity ?? 0;
+    const available = p.in_stock ? Math.max(0, Math.floor(Number(p.current_stock) || 0) - inCart) : 0;
 
     content.innerHTML = `
       <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-[#0E3A6B] text-white">
@@ -574,22 +577,29 @@ class TiendaStandaloneApp {
           <span class="font-bold">Presentación</span> · ${p.presentation || p.sale_unit || 'Unidad'}
         </p>
 
-        <!-- Selector de Cantidad y Agregar -->
-        <div class="flex items-center gap-3 border-t border-slate-100 pt-4">
-          <div class="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
-            <button onclick="window.tiendaApp.stepModalQty(-1)" class="px-3 py-2 text-slate-600 hover:bg-slate-200 font-bold text-sm">-</button>
-            <input type="number" id="modalProductQty" value="1" min="1" max="${p.current_stock || 100}" class="w-12 text-center text-xs font-bold bg-transparent outline-none">
-            <button onclick="window.tiendaApp.stepModalQty(1)" class="px-3 py-2 text-slate-600 hover:bg-slate-200 font-bold text-sm">+</button>
-          </div>
-
-          <button onclick="window.tiendaApp.addFromModal('${p.id}')" ${!p.in_stock ? 'disabled' : ''} class="btn-stayclean flex-1 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm ${!p.in_stock ? 'opacity-50 cursor-not-allowed' : ''}">
-            <i data-lucide="shopping-cart" class="w-4 h-4"></i>
-            <span>${p.in_stock ? 'Agregar al Carrito' : 'Agotado'}</span>
-          </button>
+        <div class="space-y-3 border-t border-slate-100 pt-4">
+          ${available > 0 ? `
+            <div class="flex items-center justify-between gap-3">
+              <label for="modalProductQty" class="text-sm font-semibold text-slate-700">Cantidad a agregar</label>
+              <div class="flex items-center rounded-lg border border-slate-300 bg-slate-50">
+                <button type="button" aria-label="Reducir cantidad" onclick="window.tiendaApp.stepModalQty(-1)" class="px-3 py-2 font-bold">−</button>
+                <input type="number" id="modalProductQty" value="1" min="1" max="${available}" required class="w-14 bg-transparent text-center text-sm font-bold">
+                <button type="button" aria-label="Aumentar cantidad" onclick="window.tiendaApp.stepModalQty(1)" class="px-3 py-2 font-bold">+</button>
+              </div>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <button type="button" onclick="window.tiendaApp.addFromModal('${p.id}')" class="rounded-xl border border-slate-300 px-3 py-3 text-xs font-bold text-[#0E3A6B] hover:bg-slate-50">
+                Seguir comprando
+              </button>
+              <button type="button" onclick="window.tiendaApp.addFromModal('${p.id}', true)" class="btn-stayclean rounded-xl px-3 py-3 text-xs font-bold">
+                Finalizar compra
+              </button>
+            </div>
+          ` : `
+            <p class="text-sm text-slate-600">${p.in_stock ? 'Ya tenés todas las unidades disponibles en el carrito.' : 'Producto agotado.'}</p>
+            <button type="button" onclick="window.tiendaApp.closeProductModal()" class="w-full rounded-xl border border-slate-300 py-3 text-xs font-bold text-[#0E3A6B]">Seguir comprando</button>
+          `}
         </div>
-        <button type="button" onclick="window.tiendaApp.closeProductModal()" class="w-full rounded-xl border border-slate-300 py-3 text-xs font-bold text-[#0E3A6B] hover:bg-slate-50">
-          Seguir comprando
-        </button>
       </div>
     `;
 
@@ -599,18 +609,17 @@ class TiendaStandaloneApp {
 
   stepModalQty(delta) {
     const input = document.getElementById('modalProductQty');
-    if (input) {
-      let val = parseInt(input.value) || 1;
-      val = Math.max(1, val + delta);
-      input.value = val;
-    }
+    if (!input) return;
+    const value = Math.trunc(input.valueAsNumber) || 1;
+    input.value = Math.min(Number(input.max), Math.max(1, value + delta));
   }
 
-  addFromModal(productId) {
+  addFromModal(productId, checkout = false) {
     const input = document.getElementById('modalProductQty');
-    const qty = input ? parseInt(input.value) || 1 : 1;
-    this.addToCart(productId, qty);
+    if (!input || !input.reportValidity()) return;
+    if (!this.addToCart(productId, input.valueAsNumber)) return;
     this.closeProductModal();
+    if (checkout) return this.proceedToCheckout();
   }
 
   closeProductModal() {
@@ -626,6 +635,10 @@ class TiendaStandaloneApp {
     if (!p || !p.in_stock) return;
 
     const existing = this.cart.find(item => item.id === productId);
+    if (!Number.isInteger(qty) || qty < 1 || qty + (existing?.quantity ?? 0) > Number(p.current_stock)) {
+      alert('Revisá la cantidad disponible para este producto.');
+      return false;
+    }
     if (existing) {
       existing.quantity += qty;
     } else {
@@ -640,8 +653,8 @@ class TiendaStandaloneApp {
     }
 
     this.saveCart();
-    this.openCart();
     this.renderCartItems();
+    return true;
   }
 
   updateCartQty(productId, delta) {
