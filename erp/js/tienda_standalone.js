@@ -458,26 +458,9 @@ class TiendaStandaloneApp {
           </div>
         </div>
 
-        <!-- Selector de Presentación / Variantes -->
-        <div class="space-y-2 border-t border-slate-100 pt-4">
-          <label class="block text-xs font-bold text-slate-700">Presentación / Formato:</label>
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <label class="border-2 border-[#0E3A6B] bg-blue-50/50 p-3 rounded-lg cursor-pointer flex flex-col justify-between">
-              <div class="flex justify-between items-center mb-1">
-                <span class="font-bold text-slate-800">${p.presentation || 'Unidad estándar'}</span>
-                <span class="w-2.5 h-2.5 rounded-full bg-[#0E3A6B]"></span>
-              </div>
-              <span class="font-black text-[#0E3A6B]">${Formatter.money(p.sale_price)}</span>
-            </label>
-            <label class="border border-slate-200 hover:border-slate-300 p-3 rounded-lg cursor-pointer flex flex-col justify-between opacity-80">
-              <div class="flex justify-between items-center mb-1">
-                <span class="font-medium text-slate-700">Pack / Bulto Mayorista</span>
-                <span class="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded">-10% Extra</span>
-              </div>
-              <span class="font-bold text-slate-700">Consultar x Cantidad</span>
-            </label>
-          </div>
-        </div>
+        <p class="border-t border-slate-100 pt-4 text-xs text-slate-700">
+          <span class="font-bold">Presentación</span> · ${p.presentation || p.sale_unit || 'Unidad'}
+        </p>
 
         <!-- Selector de Cantidad y Agregar -->
         <div class="flex items-center gap-3 border-t border-slate-100 pt-4">
@@ -492,6 +475,9 @@ class TiendaStandaloneApp {
             <span>${p.in_stock ? 'Agregar al Carrito' : 'Agotado'}</span>
           </button>
         </div>
+        <button type="button" onclick="window.tiendaApp.closeProductModal()" class="w-full rounded-xl border border-slate-300 py-3 text-xs font-bold text-[#0E3A6B] hover:bg-slate-50">
+          Seguir comprando
+        </button>
       </div>
     `;
 
