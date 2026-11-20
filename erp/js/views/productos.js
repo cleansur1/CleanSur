@@ -22,7 +22,7 @@ export const ProductosView = {
       await updateCentralSalePrice(productId,price);
       const products=await readCentral('products',{order:'id.asc',limit:10000});
       db.centralSetTable('products',products);
-      window.app.showNotification('Precio guardado en Supabase','success');
+      window.app.showNotification('Precio de venta actualizado','success');
       window.app.navigate('productos');
     } catch(error) {
       alert('No se pudo actualizar el precio: '+(error.message||error));
@@ -139,7 +139,7 @@ export const ProductosView = {
                         <button onclick="window.app.navigate('productos', { viewId: '${p.id}' })" title="Ver Ficha y Gráficos" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
                           <i data-lucide="eye" class="w-4 h-4"></i>
                         </button>
-                        ${window.app?.centralReadOnly ? `<button onclick="window.productosModule.changeCentralPrice('${p.id}')" title="Modificar precio de venta en Supabase" class="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"><i data-lucide="badge-dollar-sign" class="w-4 h-4"></i></button>` : ''}
+                        ${window.app?.centralReadOnly ? `<button onclick="window.productosModule.changeCentralPrice('${p.id}')" title="Cambiar precio de venta" class="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"><i data-lucide="badge-dollar-sign" class="w-4 h-4"></i></button>` : ''}
                         <button onclick="window.app.navigate('productos', { editId: '${p.id}' })" title="Editar Producto" class="p-1.5 text-slate-600 hover:bg-slate-100 rounded">
                           <i data-lucide="edit-3" class="w-4 h-4"></i>
                         </button>
