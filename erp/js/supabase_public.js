@@ -25,11 +25,16 @@ export const staycleanStaffOrders = async (token) => {
 
 const AUTH_KEY='stayclean_customer_auth_v1';
 export const staycleanAuthSession=()=>{try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null')}catch{return null}};
-const authFetch=async(path,body,token)=>{const r=await fetch(STAYCLEAN_SUPABASE_URL+path,{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)});const x=await r.json().catch(()=>({}));if(!r.ok)throw Error(x.msg||x.error_description||x.message||'Error de autenticación');return x};
+const authFetch=async(path,body,token,method='POST')=>{const r=await fetch(STAYCLEAN_SUPABASE_URL+path,{method,headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)});const x=await r.json().catch(()=>({}));if(!r.ok)throw Error(x.msg||x.error_description||x.message||'Error de autenticación');return x};
 export const staycleanAuthSignUp=async(email,password)=>authFetch('/auth/v1/signup',{email,password});
 export const staycleanAuthSignIn=async(email,password)=>{const s=await authFetch('/auth/v1/token?grant_type=password',{email,password});localStorage.setItem(AUTH_KEY,JSON.stringify(s));return s};
 export const staycleanAuthSignOut=async()=>{const s=staycleanAuthSession();if(s?.access_token)await authFetch('/auth/v1/logout',{},s.access_token).catch(()=>{});localStorage.removeItem(AUTH_KEY)};
-export const staycleanAuthReset=email=>authFetch('/auth/v1/recover',{email});
+export const staycleanAuthReset = (email, redirectTo) => authFetch(
+  '/auth/v1/recover?' + new URLSearchParams({ redirect_to: redirectTo }),
+  { email }
+);
+export const staycleanAuthUpdatePassword = (password, recoveryToken) =>
+  authFetch('/auth/v1/user', { password }, recoveryToken, 'PUT');
 export const staycleanAuthToken=async()=>{let s=staycleanAuthSession();if(!s?.access_token)return null;if(s.expires_at&&s.expires_at<Date.now()/1000+90){try{s=await authFetch('/auth/v1/token?grant_type=refresh_token',{refresh_token:s.refresh_token});localStorage.setItem(AUTH_KEY,JSON.stringify(s))}catch{localStorage.removeItem(AUTH_KEY);return null}}return s.access_token};
 export const staycleanCustomerRpc=async(name,payload={})=>{const token=await staycleanAuthToken();if(!token)throw Error('Iniciá sesión con tu cuenta');const r=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(payload)});const x=await r.json().catch(()=>({}));if(!r.ok)throw Error(x.message||'No se pudo completar la operación');return x};
 export const staycleanCustomerProfile=profile=>staycleanCustomerRpc('stayclean_customer_profile',{p_profile:profile??null});

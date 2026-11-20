@@ -2,7 +2,7 @@
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
 import { db } from './db.js';
 import { Formatter } from './models.js';
-import { staycleanPublicCatalog, staycleanPublicCatalogAromas, staycleanAuthSession, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js?v=aromas-1';
+import { staycleanPublicCatalog, staycleanPublicCatalogAromas, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthUpdatePassword, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js?v=account-1';
 
 class TiendaStandaloneApp {
   constructor() {
@@ -25,6 +25,7 @@ class TiendaStandaloneApp {
     this.loadProducts();
     this.restoreCustomerSession();
     this.setupEventListeners();
+    this.setupAccountDialog();
     this.updateProfileUI();
     this.updateCartBadge();
     this.applyFilters();
@@ -76,26 +77,138 @@ class TiendaStandaloneApp {
     const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.click();
     setTimeout(()=>URL.revokeObjectURL(url),60000);
   }
-  async openAccountDialog(){
-    const active=!!(await staycleanAuthToken());
-    const action=prompt(active?'Cuenta StayClean: escribí PEDIDOS para ver tus compras, SALIR para cerrar sesión o PERFIL para editar tus datos.':'Cuenta StayClean: escribí REGISTRO, INGRESAR o RECUPERAR:');
-    if(!action)return;
-    const cmd=action.trim().toUpperCase();
-    try{
-      if(cmd==='SALIR'){await staycleanAuthSignOut();this.customerProfile=null;this.updateProfileUI();alert('Sesión cerrada');return;}
-      if(cmd==='PEDIDOS'){await this.showOrderReceipts();return;}
-      if(cmd==='PERFIL'){this.openProfileModal();return;}
-      if(cmd==='RECUPERAR'){const email=prompt('Correo de tu cuenta');if(email){await staycleanAuthReset(email);alert('Si existe una cuenta, recibirás instrucciones por correo.')}return;}
-      if(cmd==='REGISTRO'||cmd==='INGRESAR'){
-        const email=prompt('Correo electrónico');if(!email)return;
-        const password=prompt('Contraseña (mínimo 8 caracteres)');if(!password)return;
-        if(cmd==='REGISTRO'){await staycleanAuthSignUp(email,password);alert('Revisá tu correo para confirmar la cuenta. Luego elegí INGRESAR.');return;}
-        await staycleanAuthSignIn(email,password);await this.restoreCustomerSession();
-        if(!this.customerProfile)this.openProfileModal();else alert('Sesión iniciada. Tus datos ya están disponibles.');
-        return;
+  setupAccountDialog() {
+    const dialog = document.getElementById('customerAccountDialog');
+    if (!dialog) return;
+    this.accountDialog = dialog;
+    this.accountForm = dialog.querySelector('form');
+    this.accountMessage = document.getElementById('customerAccountMessage');
+
+    dialog.addEventListener('click', async event => {
+      const action = event.target.closest('[data-account-action]')?.dataset.accountAction;
+      if (!action || this.accountBusy) return;
+      if (action === 'close') {
+        dialog.close();
+      } else if (action === 'logout') {
+        await staycleanAuthSignOut();
+        this.customerProfile = null;
+        this.updateProfileUI();
+        this.showAccountMode('login', 'Cerraste sesión.');
+      } else if (action === 'profile' || action === 'orders') {
+        dialog.close();
+        try {
+          await (action === 'profile' ? this.openProfileModal() : this.showOrderReceipts());
+        } catch (error) {
+          this.showAccountMode('account', error.message);
+        }
+      } else {
+        this.showAccountMode(action);
       }
-      alert('Opción no reconocida');
-    }catch(e){alert('Cuenta StayClean: '+e.message);}
+    });
+
+    dialog.addEventListener('cancel', event => {
+      if (this.accountBusy) event.preventDefault();
+    });
+    dialog.addEventListener('close', () => {
+      if (!dialog.open) {
+        this.accountForm.reset();
+        this.recoveryToken = null;
+      }
+    });
+    this.accountForm.addEventListener('submit', event => this.submitAccountForm(event));
+
+    const fragment = new URLSearchParams(location.hash.slice(1));
+    if (fragment.get('type') === 'recovery') {
+      this.recoveryToken = fragment.get('access_token');
+      history.replaceState(history.state, '', location.pathname + location.search);
+      if (this.recoveryToken) this.showAccountMode('newPassword');
+      else this.showAccountMode('reset', 'El enlace venció. Pedí uno nuevo.');
+    }
+  }
+
+  async openAccountDialog() {
+    if (!this.accountDialog || this.accountDialog.open) return;
+    this.showAccountMode(await staycleanAuthToken() ? 'account' : 'login');
+  }
+
+  showAccountMode(mode, message = '') {
+    const modes = {
+      login: ['Iniciar sesión', 'Ingresar'],
+      signup: ['Crear cuenta', 'Registrarme'],
+      reset: ['Recuperar contraseña', 'Enviar enlace'],
+      newPassword: ['Elegí una nueva contraseña', 'Guardar contraseña'],
+      account: ['Mi cuenta', '']
+    };
+    const [title, submit] = modes[mode];
+    const form = this.accountForm;
+    const { email, password } = form.elements;
+    this.accountMode = mode;
+    password.value = '';
+    email.required = mode === 'login' || mode === 'signup' || mode === 'reset';
+    email.disabled = !email.required;
+    password.required = mode === 'login' || mode === 'signup' || mode === 'newPassword';
+    password.disabled = !password.required;
+    password.minLength = mode === 'login' ? 0 : 8;
+    password.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+    document.getElementById('customerAccountTitle').textContent = title;
+    document.getElementById('customerAccountPasswordLabel').textContent =
+      mode === 'login' ? 'Contraseña' : 'Contraseña (mínimo 8 caracteres)';
+    document.getElementById('customerAccountEmailField').classList.toggle('hidden', email.disabled);
+    document.getElementById('customerAccountPasswordField').classList.toggle('hidden', password.disabled);
+    form.hidden = !submit;
+    form.querySelector('[type="submit"]').textContent = submit;
+    this.accountMessage.textContent = message;
+    const actions = {
+      login: ['signup', 'reset'],
+      signup: ['login'],
+      reset: ['login'],
+      newPassword: [],
+      account: ['profile', 'orders', 'logout']
+    };
+    for (const button of this.accountDialog.querySelectorAll('[data-account-action]')) {
+      button.hidden = button.dataset.accountAction !== 'close' && !actions[mode].includes(button.dataset.accountAction);
+    }
+    if (!this.accountDialog.open) this.accountDialog.showModal();
+    if (!email.disabled) email.focus();
+    else if (!password.disabled) password.focus();
+  }
+
+  async submitAccountForm(event) {
+    event.preventDefault();
+    if (this.accountBusy) return;
+    const form = this.accountForm;
+    const button = form.querySelector('[type="submit"]');
+    const email = form.elements.email.value.trim();
+    const password = form.elements.password.value;
+    this.accountBusy = button.disabled = true;
+    this.accountMessage.textContent = '';
+    try {
+      switch (this.accountMode) {
+        case 'signup':
+          await staycleanAuthSignUp(email, password);
+          this.showAccountMode('login', 'Revisá tu correo para confirmar la cuenta.');
+          break;
+        case 'reset':
+          await staycleanAuthReset(email, location.origin + location.pathname);
+          this.showAccountMode('login', 'Si existe una cuenta con ese correo, recibirás un enlace para recuperar tu contraseña.');
+          break;
+        case 'newPassword':
+          await staycleanAuthUpdatePassword(password, this.recoveryToken);
+          this.recoveryToken = null;
+          this.showAccountMode('login', 'Contraseña actualizada. Ya podés ingresar.');
+          break;
+        case 'login':
+          await staycleanAuthSignIn(email, password);
+          await this.restoreCustomerSession();
+          this.accountDialog.close();
+          if (!this.customerProfile) await this.openProfileModal();
+          break;
+      }
+    } catch (error) {
+      this.accountMessage.textContent = error.message;
+    } finally {
+      this.accountBusy = button.disabled = false;
+    }
   }
 
   async loadAromaFilter() {
