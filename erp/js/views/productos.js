@@ -2,33 +2,14 @@
 // CRUD completo, conversiones de unidades, costos Caviahue, márgenes vs markup e historial.
 
 import { db } from '../db.js';
-import { updateCentralSalePrice, readCentral } from '../supabase_erp_adapter.js';
+import { editCentralProduct, readCentral } from '../supabase_erp_adapter.js?v=product-edit-1';
 import { Formatter, PricingCalculator } from '../models.js';
 
 let productChart = null;
+const escapeProductText = value => String(value ?? '').replace(/[&<>"']/g, ch =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 
 export const ProductosView = {
-  async changeCentralPrice(productId) {
-    if (!window.app?.centralReadOnly) return;
-    const product=db.getProduct(productId);
-    if (!product) { alert('No se encontró el producto'); return; }
-    const raw=prompt('Nuevo precio de venta para '+product.name+' (ARS):',String(product.sale_price||''));
-    if (raw===null) return;
-    const price=Number(String(raw).trim().replace(',','.'));
-    if (!Number.isFinite(price) || price<=0) { alert('Ingresá un precio válido mayor que cero'); return; }
-    if (price===Number(product.sale_price)) return;
-    if (!confirm('Confirmar precio de '+product.name+': '+Formatter.money(product.sale_price)+' → '+Formatter.money(price)+'?')) return;
-    try {
-      await updateCentralSalePrice(productId,price);
-      const products=await readCentral('products',{order:'id.asc',limit:10000});
-      db.centralSetTable('products',products);
-      window.app.showNotification('Precio de venta actualizado','success');
-      window.app.navigate('productos');
-    } catch(error) {
-      alert('No se pudo actualizar el precio: '+(error.message||error));
-    }
-  },
-
   render(container, params = {}) {
     const isNew = params.action === 'new';
     const editId = params.editId;
@@ -40,6 +21,7 @@ export const ProductosView = {
 
     if (isNew || editId) {
       this.renderProductForm(container, categories, suppliers, editId ? db.getProduct(editId) : null);
+      if (params.focusPrice) container.querySelector('#prodSalePrice')?.focus();
     } else if (viewId) {
       this.renderProductDetail(container, db.getProduct(viewId));
     } else {
@@ -113,10 +95,10 @@ export const ProductosView = {
                   const isLowMargin = p.margin_pct < (p.target_margin || 35);
                   return `
                     <tr class="hover:bg-slate-50 transition" data-cat="${p.category_id}" data-low="${isLow}" data-out="${isOut}">
-                      <td class="py-3 px-3 font-mono font-bold text-slate-700">${p.sku}</td>
+                      <td class="py-3 px-3 font-mono font-bold text-slate-700">${escapeProductText(p.sku)}</td>
                       <td class="py-3 px-3">
-                        <div class="font-bold text-slate-900">${p.name}</div>
-                        <div class="text-[11px] text-slate-500">${p.brand || 'Genérico'} • ${p.presentation || p.sale_unit}</div>
+                        <div class="font-bold text-slate-900">${escapeProductText(p.name)}</div>
+                        <div class="text-[11px] text-slate-500">${escapeProductText(p.brand || 'Genérico')} • ${escapeProductText(p.presentation || p.sale_unit)}</div>
                       </td>
                       <td class="py-3 px-3">
                         <span class="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
@@ -131,15 +113,15 @@ export const ProductosView = {
                       <td class="py-3 px-3 text-right text-slate-500">${Formatter.percent(p.markup_pct)}</td>
                       <td class="py-3 px-3 text-center">
                         <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${isOut ? 'bg-rose-100 text-rose-800' : isLow ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
-                          ${p.current_stock} ${p.sale_unit}
+                          ${p.current_stock} ${escapeProductText(p.sale_unit)}
                         </span>
                       </td>
-                      <td class="py-3 px-3 text-slate-500 text-[11px]">${p.warehouse_location || '-'}</td>
+                      <td class="py-3 px-3 text-slate-500 text-[11px]">${escapeProductText(p.warehouse_location || '-')}</td>
                       <td class="py-3 px-3 text-center space-x-1 whitespace-nowrap">
                         <button onclick="window.app.navigate('productos', { viewId: '${p.id}' })" title="Ver Ficha y Gráficos" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
                           <i data-lucide="eye" class="w-4 h-4"></i>
                         </button>
-                        ${window.app?.centralReadOnly ? `<button onclick="window.productosModule.changeCentralPrice('${p.id}')" title="Cambiar precio de venta" class="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"><i data-lucide="badge-dollar-sign" class="w-4 h-4"></i></button>` : ''}
+                        ${window.app?.centralReadOnly ? `<button onclick="window.app.navigate('productos', { editId: '${p.id}', focusPrice: true })" title="Cambiar precio de venta" class="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"><i data-lucide="badge-dollar-sign" class="w-4 h-4"></i></button>` : ''}
                         <button onclick="window.app.navigate('productos', { editId: '${p.id}' })" title="Editar Producto" class="p-1.5 text-slate-600 hover:bg-slate-100 rounded">
                           <i data-lucide="edit-3" class="w-4 h-4"></i>
                         </button>
@@ -172,14 +154,14 @@ export const ProductosView = {
             </button>
             <div>
               <h1 class="text-2xl font-bold text-slate-800 tracking-tight">
-                ${isEdit ? `Editar Producto: ${product.name}` : 'Nuevo Producto / Insumo'}
+                ${isEdit ? `Editar Producto: ${escapeProductText(product.name)}` : 'Nuevo Producto / Insumo'}
               </h1>
               <p class="text-xs text-slate-500">Definición de costos, márgenes, factor de conversión y stock.</p>
             </div>
           </div>
         </div>
 
-        <form id="productForm" onsubmit="window.productosModule.saveProductForm(event, '${product ? product.id : ''}')" class="space-y-5">
+        <form id="productForm" data-product-edit="${isEdit}" onsubmit="window.productosModule.saveProductForm(event, '${product ? product.id : ''}')" class="space-y-5">
           <!-- 1. Datos Generales -->
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
             <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-2">1. Identificación y Clasificación</h2>
@@ -187,22 +169,22 @@ export const ProductosView = {
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Código / SKU *</label>
-                <input type="text" name="sku" required value="${product ? product.sku : ''}" placeholder="Ej: QUIM-LAV-5L" class="w-full border border-slate-300 rounded-lg p-2 font-mono">
+                <input type="text" name="sku" required value="${escapeProductText(product ? product.sku : '')}" placeholder="Ej: QUIM-LAV-5L" class="w-full border border-slate-300 rounded-lg p-2 font-mono">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Código de Barras (Opcional)</label>
-                <input type="text" name="barcode" value="${product ? product.barcode || '' : ''}" placeholder="7791234567890" class="w-full border border-slate-300 rounded-lg p-2 font-mono">
+                <input type="text" name="barcode" value="${escapeProductText(product ? product.barcode || '' : '')}" placeholder="7791234567890" class="w-full border border-slate-300 rounded-lg p-2 font-mono">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Marca</label>
-                <input type="text" name="brand" value="${product ? product.brand || '' : ''}" placeholder="Ej: Químicos del Comahue" class="w-full border border-slate-300 rounded-lg p-2">
+                <input type="text" name="brand" value="${escapeProductText(product ? product.brand || '' : '')}" placeholder="Ej: Químicos del Comahue" class="w-full border border-slate-300 rounded-lg p-2">
               </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div class="md:col-span-2">
                 <label class="block font-bold text-slate-700 mb-1">Nombre Completo del Producto *</label>
-                <input type="text" name="name" required value="${product ? product.name : ''}" placeholder="Ej: Lavandina Concentrada 55g x 5 Litros" class="w-full border border-slate-300 rounded-lg p-2 font-medium">
+                <input type="text" name="name" required value="${escapeProductText(product ? product.name : '')}" placeholder="Ej: Lavandina Concentrada 55g x 5 Litros" class="w-full border border-slate-300 rounded-lg p-2 font-medium">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Categoría *</label>
@@ -217,14 +199,14 @@ export const ProductosView = {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Subcategoría</label>
-                <input type="text" name="subcategory" value="${product ? product.subcategory || '' : ''}" placeholder="Ej: Lavandina, Vasos, Cajas..." class="w-full border border-slate-300 rounded-lg p-2">
+                <input type="text" name="subcategory" value="${escapeProductText(product ? product.subcategory || '' : '')}" placeholder="Ej: Lavandina, Vasos, Cajas..." class="w-full border border-slate-300 rounded-lg p-2">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Proveedor Principal</label>
                 <select name="supplier_id" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
                   <option value="">Sin proveedor asignado</option>
                   ${suppliers.map(s => `
-                    <option value="${s.id}" ${product && product.supplier_id === s.id ? 'selected' : ''}>${s.name}</option>
+                    <option value="${s.id}" ${product && (product.preferred_supplier_id ?? product.supplier_id) === s.id ? 'selected' : ''}>${s.name}</option>
                   `).join('')}
                 </select>
               </div>
@@ -232,7 +214,7 @@ export const ProductosView = {
 
             <div class="text-xs">
               <label class="block font-bold text-slate-700 mb-1">Descripción</label>
-              <textarea name="description" rows="2" placeholder="Detalles de uso o recomendaciones..." class="w-full border border-slate-300 rounded-lg p-2">${product ? product.description || '' : ''}</textarea>
+              <textarea name="description" rows="2" placeholder="Detalles de uso o recomendaciones..." class="w-full border border-slate-300 rounded-lg p-2">${escapeProductText(product ? product.description || '' : '')}</textarea>
             </div>
           </div>
 
@@ -246,11 +228,11 @@ export const ProductosView = {
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Unidad de Compra</label>
-                <input type="text" name="purchase_unit" value="${product ? product.purchase_unit || '' : 'Caja x 4'}" placeholder="Ej: Caja x 4, Bulto x 1000..." class="w-full border border-slate-300 rounded-lg p-2">
+                <input type="text" name="purchase_unit" value="${escapeProductText(product ? product.purchase_unit || '' : 'Caja x 4')}" placeholder="Ej: Caja x 4, Bulto x 1000..." class="w-full border border-slate-300 rounded-lg p-2">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Unidad de Venta (Unidad Base) *</label>
-                <input type="text" name="sale_unit" required value="${product ? product.sale_unit || '' : 'Bidón 5L'}" placeholder="Ej: Bidón 5L, Unidad, Pack..." class="w-full border border-slate-300 rounded-lg p-2">
+                <input type="text" name="sale_unit" required value="${escapeProductText(product ? product.sale_unit || '' : 'Bidón 5L')}" placeholder="Ej: Bidón 5L, Unidad, Pack..." class="w-full border border-slate-300 rounded-lg p-2">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Factor de Conversión *</label>
@@ -283,7 +265,7 @@ export const ProductosView = {
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Margen Objetivo (%)</label>
                 <div class="flex gap-2">
-                  <input type="number" step="0.1" id="prodTargetMargin" name="target_margin" value="${product ? product.target_margin || 40 : 40}" class="w-full border border-slate-300 rounded-lg p-2 text-right">
+                  <input type="number" step="0.1" id="prodTargetMargin" name="target_margin" value="${product?.target_margin ?? 40}" class="w-full border border-slate-300 rounded-lg p-2 text-right">
                   <button type="button" onclick="window.productosModule.calcSuggested()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold">
                     Sugerir
                   </button>
@@ -327,15 +309,15 @@ export const ProductosView = {
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Stock Mínimo (Alerta)</label>
-                <input type="number" name="min_stock" value="${product ? product.min_stock || 10 : 10}" class="w-full border border-slate-300 rounded-lg p-2 text-center">
+                <input type="number" name="min_stock" value="${product?.min_stock ?? 10}" class="w-full border border-slate-300 rounded-lg p-2 text-center">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Stock Máximo</label>
-                <input type="number" name="max_stock" value="${product ? product.max_stock || 50 : 50}" class="w-full border border-slate-300 rounded-lg p-2 text-center">
+                <input type="number" name="max_stock" value="${product?.max_stock ?? 50}" class="w-full border border-slate-300 rounded-lg p-2 text-center">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Ubicación en Depósito</label>
-                <input type="text" name="warehouse_location" value="${product ? product.warehouse_location || '' : 'Depósito A'}" placeholder="Ej: Estante 3 - Fila B" class="w-full border border-slate-300 rounded-lg p-2">
+                <input type="text" name="warehouse_location" value="${escapeProductText(product ? product.warehouse_location || '' : 'Depósito A')}" placeholder="Ej: Estante 3 - Fila B" class="w-full border border-slate-300 rounded-lg p-2">
               </div>
             </div>
           </div>
@@ -354,6 +336,8 @@ export const ProductosView = {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+    const form = container.querySelector("#productForm");
+    form.initialValues = new FormData(form);
     this.attachFormListeners();
   },
 
@@ -376,10 +360,10 @@ export const ProductosView = {
             </button>
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-xs font-mono font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">${product.sku}</span>
+                <span class="text-xs font-mono font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">${escapeProductText(product.sku)}</span>
                 <span class="text-xs text-slate-500">${cat ? cat.name : ''}</span>
               </div>
-              <h1 class="text-2xl font-bold text-slate-800 tracking-tight mt-0.5">${product.name}</h1>
+              <h1 class="text-2xl font-bold text-slate-800 tracking-tight mt-0.5">${escapeProductText(product.name)}</h1>
             </div>
           </div>
           <button onclick="window.app.navigate('productos', { editId: '${product.id}' })" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
@@ -392,7 +376,7 @@ export const ProductosView = {
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <div class="text-xs text-slate-500 font-medium">Costo Puesto Caviahue</div>
             <div class="text-lg font-bold text-blue-900 mt-1">${Formatter.money(product.caviahue_cost)}</div>
-            <div class="text-[11px] text-slate-400">Por ${product.sale_unit}</div>
+            <div class="text-[11px] text-slate-400">Por ${escapeProductText(product.sale_unit)}</div>
           </div>
 
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -403,7 +387,7 @@ export const ProductosView = {
 
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <div class="text-xs text-slate-500 font-medium">Stock Actual</div>
-            <div class="text-lg font-bold text-slate-800 mt-1">${product.current_stock} ${product.sale_unit}</div>
+            <div class="text-lg font-bold text-slate-800 mt-1">${product.current_stock} ${escapeProductText(product.sale_unit)}</div>
             <div class="text-[11px] text-slate-500">Mín: ${product.min_stock} | Máx: ${product.max_stock}</div>
           </div>
 
@@ -584,7 +568,7 @@ window.productosModule = {
     }
   },
 
-  saveProductForm(e, editId) {
+  async saveProductForm(e, editId) {
     e.preventDefault();
     const form = e.target;
     const formData = new FormData(form);
@@ -612,6 +596,49 @@ window.productosModule = {
       max_stock: Number(formData.get('max_stock')) || 50,
       warehouse_location: formData.get('warehouse_location').trim()
     };
+
+    if (window.app.centralReadOnly) {
+      const product = db.getProduct(editId);
+      if (!product) return;
+      const changes = Object.fromEntries(Object.entries(data).filter(([key]) =>
+        formData.get(key) !== form.initialValues.get(key)
+      ));
+      if ('supplier_id' in changes) {
+        changes.preferred_supplier_id = changes.supplier_id || null;
+        delete changes.supplier_id;
+      }
+      if ('category_id' in changes) changes.category_id ||= null;
+      for (const key of ['min_stock', 'max_stock', 'target_margin']) {
+        if (key in changes) changes[key] = Number(formData.get(key));
+      }
+      if (!Object.keys(changes).length) {
+        window.app.navigate('productos');
+        return;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      if (submit.disabled) return;
+      submit.disabled = true;
+      try {
+        const updated = await editCentralProduct(editId, changes, product.current_stock);
+        db.centralSetTable('products', db.getProducts().map(row => row.id === updated.id ? updated : row));
+        if ('current_stock' in changes) {
+          try {
+            db.centralSetTable('inventory_movements', await readCentral('inventory_movements', { order: 'id.asc', limit: 10000 }));
+          } catch {
+            window.app.showNotification('Producto guardado. Recargá para ver el movimiento de stock.', 'info');
+            window.app.navigate('productos');
+            return;
+          }
+        }
+        window.app.showNotification('Producto guardado', 'success');
+        window.app.navigate('productos');
+      } catch (error) {
+        alert(error.message);
+      } finally {
+        submit.disabled = false;
+      }
+      return;
+    }
 
     if (editId) data.id = editId;
 

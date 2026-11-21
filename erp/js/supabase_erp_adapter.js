@@ -30,6 +30,24 @@ export const centralTables = Object.freeze({
   purchase_orders:'purchase_orders',cash_registers:'cash_registers',audit_log:'audit_log'
 });
 
+export async function editCentralProduct(productId, changes, expectedStock) {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error('Volvé a iniciar sesión en CleanSur');
+  const response = await fetch(`${STAYCLEAN_SUPABASE_URL}/rest/v1/rpc/stayclean_staff_edit_product`, {
+    method: 'POST',
+    headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      p_product_id: productId,
+      p_changes: changes,
+      p_expected_stock: expectedStock,
+      p_request_id: crypto.randomUUID()
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || 'No se pudo guardar el producto');
+  return data;
+}
+
 export async function updateCentralSalePrice(productId, salePrice) {
   const session=getAdminSession();
   if(!session?.access_token) throw new Error('Debés iniciar sesión en StayClean');

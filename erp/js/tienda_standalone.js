@@ -4,6 +4,9 @@ import { db } from './db.js';
 import { Formatter } from './models.js';
 import { staycleanPublicCatalog, staycleanPublicCatalogAromas, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthUpdatePassword, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js?v=account-1';
 
+const escapeCatalogText = value => String(value ?? '').replace(/[&<>"']/g, ch =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
 class TiendaStandaloneApp {
   constructor() {
     this.products = [];
@@ -469,7 +472,7 @@ class TiendaStandaloneApp {
               ` : ''}
 
               <!-- Foto del Producto -->
-              <img src="${p.img_url}" alt="${p.name}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300">
+              <img src="${p.img_url}" alt="${escapeCatalogText(p.name)}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300">
             </div>
 
             <!-- Contenido del Producto: Título y Precios -->
@@ -478,12 +481,12 @@ class TiendaStandaloneApp {
                 ${p.brand || 'StayClean'} • ${p.sale_unit || 'Unidad'}
               </span>
 
-              <h3 onclick="window.tiendaApp.openProductModal('${p.id}')" class="text-[13px] sm:text-sm font-bold text-slate-900 group-hover:text-[#4EA1DD] line-clamp-2 min-h-[2.5rem] leading-snug cursor-pointer transition" title="${p.name}">
-                ${p.name}
+              <h3 onclick="window.tiendaApp.openProductModal('${p.id}')" class="text-[13px] sm:text-sm font-bold text-slate-900 group-hover:text-[#4EA1DD] line-clamp-2 min-h-[2.5rem] leading-snug cursor-pointer transition" title="${escapeCatalogText(p.name)}">
+                ${escapeCatalogText(p.name)}
               </h3>
 
               <p class="text-[11px] text-slate-500 truncate font-normal">
-                ${p.presentation || 'Presentación profesional'}
+                ${escapeCatalogText(p.presentation || 'Presentación profesional')}
               </p>
 
               <!-- Bloque de Precios Estilo Voltra (Precio actual + tachado) -->
@@ -541,7 +544,7 @@ class TiendaStandaloneApp {
       <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-[#0E3A6B] text-white">
         <div>
           <span class="text-[10px] font-bold uppercase tracking-wider text-[#8FD0F4] block">Detalle de Producto</span>
-          <h3 class="text-sm font-bold text-white">${p.name}</h3>
+          <h3 class="text-sm font-bold text-white">${escapeCatalogText(p.name)}</h3>
         </div>
         <button onclick="window.tiendaApp.closeProductModal()" class="p-1 rounded-lg text-white/80 hover:text-white hover:bg-white/10">
           <i data-lucide="x" class="w-5 h-5"></i>
@@ -551,7 +554,7 @@ class TiendaStandaloneApp {
       <div class="p-6 space-y-5">
         <div class="flex flex-col sm:flex-row gap-5 items-center">
           <div class="w-48 h-48 bg-slate-50 rounded-xl p-3 shrink-0 flex items-center justify-center border border-slate-100">
-            <img src="${p.img_url}" alt="${p.name}" class="max-h-full max-w-full object-contain">
+            <img src="${p.img_url}" alt="${escapeCatalogText(p.name)}" class="max-h-full max-w-full object-contain">
           </div>
 
           <div class="space-y-2 flex-1">
@@ -562,8 +565,8 @@ class TiendaStandaloneApp {
               </span>
             </div>
 
-            <h2 class="text-base font-bold text-slate-900">${p.name}</h2>
-            <p class="text-xs text-slate-500">${p.description || p.presentation || 'Insumo de primera calidad para gastronomía y hotelería.'}</p>
+            <h2 class="text-base font-bold text-slate-900">${escapeCatalogText(p.name)}</h2>
+            <p class="text-xs text-slate-500">${escapeCatalogText(p.description || p.presentation || 'Insumo de primera calidad para gastronomía y hotelería.')}</p>
             
             <div class="pt-2 flex items-baseline gap-2">
               <span class="price-stayclean text-2xl font-black">${Formatter.money(p.sale_price)}</span>
@@ -574,7 +577,7 @@ class TiendaStandaloneApp {
         </div>
 
         <p class="border-t border-slate-100 pt-4 text-xs text-slate-700">
-          <span class="font-bold">Presentación</span> · ${p.presentation || p.sale_unit || 'Unidad'}
+          <span class="font-bold">Presentación</span> · ${escapeCatalogText(p.presentation || p.sale_unit || 'Unidad')}
         </p>
 
         <div class="space-y-3 border-t border-slate-100 pt-4">
@@ -729,11 +732,11 @@ class TiendaStandaloneApp {
 
     container.innerHTML = this.cart.map(item => `
       <div class="py-3 flex items-center gap-3">
-        <img src="${item.img_url}" alt="${item.name}" class="w-14 h-14 object-contain rounded-lg bg-slate-50 border border-slate-100 p-1 shrink-0">
+        <img src="${item.img_url}" alt="${escapeCatalogText(item.name)}" class="w-14 h-14 object-contain rounded-lg bg-slate-50 border border-slate-100 p-1 shrink-0">
         
         <div class="flex-1 min-w-0">
-          <h4 class="text-xs font-bold text-slate-800 truncate">${item.name}</h4>
-          <p class="text-[10px] text-slate-400 truncate">${item.presentation || ''}</p>
+          <h4 class="text-xs font-bold text-slate-800 truncate">${escapeCatalogText(item.name)}</h4>
+          <p class="text-[10px] text-slate-400 truncate">${escapeCatalogText(item.presentation || '')}</p>
           <span class="text-xs font-extrabold text-[#1f4e5b] block mt-0.5">
             ${Formatter.money(item.price)}
           </span>
@@ -970,7 +973,7 @@ class TiendaStandaloneApp {
             ${this.cart.map(item => `
               <div class="py-1.5 flex justify-between items-center text-[11px]">
                 <div class="truncate max-w-[240px]">
-                  <strong>${item.quantity}x</strong> ${item.name}
+                  <strong>${item.quantity}x</strong> ${escapeCatalogText(item.name)}
                 </div>
                 <div class="font-mono text-slate-800 shrink-0">
                   ${Formatter.money(item.price * item.quantity)}
