@@ -3,6 +3,13 @@
 import { db } from '../db.js';
 import { Formatter } from '../models.js';
 
+const publicUrl = 'https://cleansur1.github.io/CleanSur/tienda/';
+const shareUrl = 'https://wa.me/?text=' + encodeURIComponent(
+  `¡Hola! Te compartimos el catálogo de CleanSur. Podés armar tu pedido acá: ${publicUrl}`
+);
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
 export const TiendaView = {
   currentCategoryFilter: 'ALL',
   searchQuery: '',
@@ -13,8 +20,7 @@ export const TiendaView = {
     const categories = db.getCategories();
     const orders = db.getOrders() || [];
     const webOrders = orders.filter(o => o.status === 'Nuevo' || (o.notes && o.notes.includes('Tienda')));
-    const origin = window.location.origin || 'http://localhost:8080';
-    const publicUrl = `${origin}/tienda.html`;
+    const central = window.app.centralReadOnly;
 
     // Filtrar productos para la vista previa administrativa
     const products = allProducts.filter(p => {
@@ -42,20 +48,19 @@ export const TiendaView = {
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#4EA1DD]/20 text-[#8FD0F4] border border-[#4EA1DD]/40">
                   <i data-lucide="globe" class="w-3.5 h-3.5 mr-1.5 text-[#4EA1DD]"></i> Tienda Online Pública para Clientes
                 </span>
-                <span class="text-xs text-slate-300">StayClean Caviahue</span>
+                <span class="text-xs text-slate-300">CleanSur Caviahue</span>
               </div>
-              <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Catálogo Web StayClean</h1>
+              <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Catálogo Web CleanSur</h1>
               <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">
-                Tus clientes pueden armar su pedido desde su celular o PC con la identidad oficial StayClean. 
-                Desde aquí podés <strong>agregar productos nuevos</strong> y <strong>editar fotos, precios, descripciones y presentaciones</strong> en tiempo real.
+                Compartí el catálogo con tus clientes y editá los datos de los productos desde el ERP.
               </p>
               
               <!-- Botón Principal: Agregar Producto a la Tienda -->
               <div class="pt-2">
-                <button onclick="window.tiendaAdminModule.openProductEditor()" class="px-5 py-2.5 bg-[#4EA1DD] hover:bg-[#8FD0F4] hover:text-[#0E3A6B] text-white rounded-xl text-xs font-black shadow-lg shadow-[#0E3A6B]/50 transition flex items-center gap-2 transform hover:-translate-y-0.5">
+                ${central ? '' : `<button onclick="window.tiendaAdminModule.openProductEditor()" class="px-5 py-2.5 bg-[#4EA1DD] hover:bg-[#8FD0F4] hover:text-[#0E3A6B] text-white rounded-xl text-xs font-black shadow-lg shadow-[#0E3A6B]/50 transition flex items-center gap-2 transform hover:-translate-y-0.5">
                   <i data-lucide="plus-circle" class="w-4 h-4"></i>
                   <span>+ Agregar Nuevo Producto a la Tienda</span>
-                </button>
+                </button>`}
               </div>
             </div>
 
@@ -64,21 +69,21 @@ export const TiendaView = {
               <span class="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">Enlace Directo para Clientes:</span>
               <div class="flex items-center gap-1.5 bg-slate-950 p-2 rounded-lg border border-slate-700">
                 <input type="text" id="erpPublicTiendaUrl" readonly value="${publicUrl}" class="bg-transparent text-xs text-[#8FD0F4] font-mono flex-1 outline-none truncate">
-                <button onclick="window.tiendaAdminModule.copyPublicLink()" class="px-3 py-1.5 bg-[#0E3A6B] hover:bg-[#4EA1DD] text-white rounded-md text-xs font-bold transition flex items-center gap-1 shadow-sm shrink-0">
+                <button type="button" data-copy-store-link onclick="window.tiendaAdminModule.copyPublicLink()" class="px-3 py-1.5 bg-[#0E3A6B] hover:bg-[#4EA1DD] text-white rounded-md text-xs font-bold transition flex items-center gap-1 shadow-sm shrink-0">
                   <i data-lucide="copy" class="w-3.5 h-3.5"></i>
                   <span>Copiar Link</span>
                 </button>
               </div>
 
               <div class="flex gap-2">
-                <a href="tienda.html" target="_blank" class="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold text-center transition flex items-center justify-center gap-1.5">
+                <a href="${publicUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold text-center transition flex items-center justify-center gap-1.5">
                   <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
                   <span>Abrir Tienda Cliente</span>
                 </a>
-                <button onclick="window.tiendaAdminModule.shareWhatsAppLink()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5">
+                <a href="${shareUrl}" target="_blank" rel="noopener noreferrer" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5">
                   <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
-                  <span>Enviar x WA</span>
-                </button>
+                  <span>Compartir por WhatsApp</span>
+                </a>
               </div>
             </div>
 
@@ -152,11 +157,11 @@ export const TiendaView = {
             
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-xs font-bold text-slate-700">Filtrar por Rubro:</span>
-              <button onclick="window.tiendaAdminModule.filterCat('ALL')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${this.currentCategoryFilter === 'ALL' ? 'bg-[#1f4e5b] text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">
+              <button type="button" data-store-category onclick="window.tiendaAdminModule.filterCat('ALL')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${this.currentCategoryFilter === 'ALL' ? 'bg-[#1f4e5b] text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">
                 Todos (${allProducts.length})
               </button>
               ${categories.map(c => `
-                <button onclick="window.tiendaAdminModule.filterCat('${c.id}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${this.currentCategoryFilter === c.id ? 'bg-[#1f4e5b] text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">
+                <button type="button" data-store-category onclick="window.tiendaAdminModule.filterCat('${c.id}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${this.currentCategoryFilter === c.id ? 'bg-[#1f4e5b] text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">
                   ${c.name}
                 </button>
               `).join('')}
@@ -165,7 +170,7 @@ export const TiendaView = {
             <!-- Buscador rápido en el catálogo -->
             <div class="relative w-full md:w-72">
               <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-              <input type="text" id="erpTiendaSearch" placeholder="Buscar por nombre, SKU, marca..." value="${this.searchQuery}" oninput="window.tiendaAdminModule.handleSearch(event)" class="w-full pl-9 pr-4 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#1f4e5b] outline-none">
+              <input type="text" id="erpTiendaSearch" placeholder="Buscar por nombre, SKU, marca..." value="${escapeHtml(this.searchQuery)}" oninput="window.tiendaAdminModule.handleSearch(event)" class="w-full pl-9 pr-4 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#1f4e5b] outline-none">
             </div>
 
           </div>
@@ -179,10 +184,10 @@ export const TiendaView = {
             <h2 class="text-base font-bold text-slate-800">
               Productos en Tienda Nube (${products.length})
             </h2>
-            <button onclick="window.tiendaAdminModule.openProductEditor()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5">
+            ${central ? '' : `<button onclick="window.tiendaAdminModule.openProductEditor()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               <span>+ Agregar Producto</span>
-            </button>
+            </button>`}
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
@@ -227,7 +232,7 @@ export const TiendaView = {
 
                       <!-- BOTÓN EDITAR EN CADA PRODUCTO (Esquina Superior Derecha) -->
                       <div class="absolute top-3 right-3 z-20">
-                        <button onclick="window.tiendaAdminModule.openProductEditor('${p.id}')" class="px-2.5 py-1.5 bg-white/95 hover:bg-white text-slate-800 hover:text-blue-600 rounded-lg text-xs font-bold shadow-md border border-slate-200 flex items-center gap-1 transition" title="Editar Información, Precios y Fotos">
+                        <button onclick="${central ? `window.app.navigate('productos', { editId: '${p.id}' })` : `window.tiendaAdminModule.openProductEditor('${p.id}')`}" class="px-2.5 py-1.5 bg-white/95 hover:bg-white text-slate-800 hover:text-blue-600 rounded-lg text-xs font-bold shadow-md border border-slate-200 flex items-center gap-1 transition" title="Editar producto">
                           <i data-lucide="edit-3" class="w-3.5 h-3.5 text-blue-600"></i>
                           <span>Editar</span>
                         </button>
@@ -271,7 +276,7 @@ export const TiendaView = {
 
                   <!-- BOTÓN EDITAR COMPLETO AL PIE DE LA TARJETA -->
                   <div class="p-4 pt-0 space-y-2">
-                    <button onclick="window.tiendaAdminModule.openProductEditor('${p.id}')" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
+                    <button onclick="${central ? `window.app.navigate('productos', { editId: '${p.id}' })` : `window.tiendaAdminModule.openProductEditor('${p.id}')`}" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
                       <i data-lucide="edit" class="w-3.5 h-3.5 text-blue-600"></i>
                       <span>Editar Info, Precios y Fotos</span>
                     </button>
@@ -286,9 +291,9 @@ export const TiendaView = {
             <div class="bg-white p-12 rounded-xl text-center text-slate-400 border border-slate-200 space-y-3">
               <i data-lucide="package-search" class="w-10 h-10 mx-auto text-slate-300"></i>
               <p class="text-sm font-semibold text-slate-600">No hay productos que coincidan con los filtros</p>
-              <button onclick="window.tiendaAdminModule.openProductEditor()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold">
+              ${central ? '' : `<button onclick="window.tiendaAdminModule.openProductEditor()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold">
                 + Crear un producto nuevo
-              </button>
+              </button>`}
             </div>
           ` : ''}
 
@@ -320,27 +325,30 @@ export const TiendaView = {
       },
 
       handleSearch(e) {
-        view.searchQuery = e.target.value;
+        const { value, selectionStart, selectionEnd } = e.target;
+        view.searchQuery = value;
         view.render(view.container);
+        const search = view.container.querySelector('#erpTiendaSearch');
+        search.focus();
+        search.setSelectionRange(selectionStart, selectionEnd);
       },
 
-      copyPublicLink() {
+      async copyPublicLink() {
         const input = document.getElementById('erpPublicTiendaUrl');
-        if (input) {
-          navigator.clipboard.writeText(input.value).then(() => {
-            alert('¡Enlace copiado!\n\nPodés pegarlo en WhatsApp o redes para tus clientes:\n' + input.value);
-          }).catch(() => {
-            input.select();
-            document.execCommand('copy');
-            alert('¡Enlace copiado!\n' + input.value);
-          });
+        if (!input) return;
+        try {
+          await navigator.clipboard.writeText(input.value);
+        } catch {
+          input.focus();
+          input.select();
+          let copied = false;
+          try { copied = document.execCommand('copy'); } catch {}
+          if (!copied) {
+            window.app.showNotification('Enlace seleccionado. Presioná Ctrl+C (o ⌘+C) para copiarlo.', 'info');
+            return;
+          }
         }
-      },
-
-      shareWhatsAppLink() {
-        const url = document.getElementById('erpPublicTiendaUrl')?.value || window.location.origin + '/tienda.html';
-        const msg = encodeURIComponent(`¡Hola! Te compartimos el catálogo online oficial de *StayClean Distribuidora* con insumos descartables, químicos y hotelería con entregas en Caviahue:\n\n${url}\n\nPodés armar tu pedido directamente desde el link.`);
-        window.open(`https://wa.me/?text=${msg}`, '_blank');
+        window.app.showNotification('Enlace de la tienda copiado', 'success');
       },
 
       // Abrir Modal de Edición / Creación de Producto

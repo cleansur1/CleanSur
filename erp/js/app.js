@@ -22,7 +22,7 @@ import { UsuariosView } from './views/usuarios.js?v=6.0';
 import { OcrFacturasView } from './views/ocr_facturas.js?v=10.6';
 import { CajaView } from './views/caja.js?v=6.0';
 import { ArcaView } from './views/arca.js?v=6.0';
-import { TiendaView } from './views/tienda.js?v=6.0';
+import { TiendaView } from './views/tienda.js?v=6.1';
 
 let deferredPrompt = null;
 
@@ -439,13 +439,14 @@ async function bootCentralReadOnly() {
             control.matches('#centralPurchaseDetailModal .close-purchase-detail, #centralPurchaseDetailModal [data-edit-aromas]') ||
             control.closest('#centralPurchaseDetailModal [data-aroma-editor] form')
           );
+          const storeControl = app.currentRoute === 'tienda' && control.matches('[data-copy-store-link], [data-store-category]');
           const priceControl = app.currentRoute === 'productos' && control.closest('#productForm[data-product-edit="true"]');
           const purchaseOrderControl = app.currentRoute === 'ordenes_compra' &&
             (control.matches('[data-purchase-order-control]') || control.closest('#purchaseOrderDialog'));
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
             (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale') ||
               handler.startsWith('window.ventasModule.removeFromCart('));
-          if (salesControl || purchaseOrderControl || safeNavigation || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          if (salesControl || purchaseOrderControl || safeNavigation || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }
