@@ -906,7 +906,7 @@ class TiendaStandaloneApp {
 
   async confirmSelectedPayment() {
     const mode=document.getElementById('checkoutPaymentMethod')?.value;
-    if(mode==='Mercado Pago')return this.startMercadoPagoCheckout();
+    if(mode==='Mercado Pago'){this.showNotice('Mercado Pago no está disponible por el momento.');return;}
     if(!mode){this.showNotice('Seleccioná una forma de pago.');return;}
     return this.submitOfflineOrder();
   }
@@ -1046,8 +1046,8 @@ class TiendaStandaloneApp {
         <div class="space-y-1.5">
           <label class="block font-bold text-slate-700">Forma de Pago:</label>
           <select id="checkoutPaymentMethod" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
-            <option value="Mercado Pago">Mercado Pago (integración en pruebas)</option>
-            <option value="Efectivo contra entrega">Efectivo contra entrega en Caviahue</option>
+            <option value="Mercado Pago" disabled>Mercado Pago — No disponible</option>
+            <option value="Efectivo contra entrega" selected>Efectivo contra entrega en Caviahue</option>
             <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
             <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
           </select>
@@ -1058,7 +1058,7 @@ class TiendaStandaloneApp {
           <button onclick="window.tiendaApp.confirmSelectedPayment()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-[#0E3A6B] hover:bg-[#1E88E5] text-white shadow-md flex items-center justify-center gap-2">
             <i data-lucide="check-circle" class="w-4 h-4"></i><span>Continuar con la forma de pago elegida</span>
           </button>
-          <p class="text-[10px] text-slate-500 text-center">Mercado Pago te lleva al pago online de prueba. Las otras opciones registran el pedido para coordinar el pago.</p>
+          <p class="text-[10px] text-slate-500 text-center">El pedido se registra para coordinar el pago.</p>
         </div>
 
       </div>
