@@ -4,7 +4,7 @@
 import { db } from '../db.js';
 import { getAdminSession } from '../supabase_admin.js';
 import { Formatter } from '../models.js';
-import { PedidosView } from './pedidos.js?v=6.0';
+import { PedidosView } from './pedidos.js?v=6.1';
 
 let cartItems = [];
 let selectedCustomer = null;

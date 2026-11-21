@@ -2,6 +2,8 @@
 // Estados: Nuevo, Preparando, Listo, Entregado. Conversión directa a Venta Facturada.
 
 import { db } from '../db.js';
+import { getAdminSession } from '../supabase_admin.js';
+import { STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from '../supabase_public.js';
 import { Formatter } from '../models.js';
 
 export const PedidosView = {
@@ -57,12 +59,12 @@ export const PedidosView = {
                       <td class="py-3 px-4 text-slate-600">${o.payment_method}</td>
                       <td class="py-3 px-4 text-right font-bold text-slate-900">${Formatter.money(o.total)}</td>
                       <td class="py-3 px-4 text-center space-x-2">
-                        ${o.status !== 'Entregado' && o.status !== 'Cancelado' ? `
-                          <button onclick="window.pedidosModule.convertOrder('${o.id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold shadow-sm">
+                        ${!['ENTREGADO','CANCELADO'].includes(String(o.status).toUpperCase()) && !o.converted_to_sale_number ? `
+                          <button onclick="window.pedidosModule.convertOrder('${o.id}', this)" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold shadow-sm">
                             Convertir en Venta
                           </button>
                         ` : `
-                          <span class="text-slate-400 text-[10px]">Facturado (${o.converted_to_sale_number || 'OK'})</span>
+                          <span class="text-slate-400 text-[10px]">${o.converted_to_sale_number || o.status}</span>
                         `}
                       </td>
                     </tr>
@@ -80,15 +82,36 @@ export const PedidosView = {
 };
 
 window.pedidosModule = {
-  convertOrder(orderId) {
-    if (confirm('¿Convertir este pedido en una Venta Facturada? Esto descontará el stock y registrará el cobro o la cuenta corriente.')) {
-      try {
-        const sale = db.convertOrderToSale(orderId);
-        window.app.showNotification(`¡Pedido convertido en Venta ${sale.sale_number} exitosamente!`, 'success');
-        window.app.navigate('ventas');
-      } catch (err) {
-        alert(err.message);
+  async convertOrder(orderId, button) {
+    const central = window.app.centralReadOnly;
+    const message = central
+      ? '¿Registrar la entrega y convertir el pedido en venta? Se conserva el estado de pago y el stock ya descontado.'
+      : '¿Convertir este pedido en venta y registrar el movimiento de stock?';
+    if (!confirm(message)) return;
+    button.disabled = true;
+    try {
+      let sale;
+      if (central) {
+        const token = getAdminSession()?.access_token;
+        if (!token) throw Error('Volvé a iniciar sesión en CleanSur.');
+        const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_convert_order', {
+          method: 'POST',
+          headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_order_id: orderId })
+        });
+        sale = await response.json();
+        if (!response.ok) throw Error(sale.message || 'No se pudo convertir el pedido.');
+        db.centralSetTable('orders', db.getOrders().map(order => order.id === orderId
+          ? { ...order, status: 'ENTREGADO', converted_to_sale_number: sale.sale_number } : order));
+      } else {
+        sale = db.convertOrderToSale(orderId);
       }
+      window.app.showNotification('Venta ' + sale.sale_number + ' registrada', 'success');
+      window.app.navigate('ventas');
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      button.disabled = false;
     }
   }
 };

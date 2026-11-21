@@ -3,7 +3,7 @@ import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=8.1';
-import { VentasView } from './views/ventas.js?v=8.4';
+import { VentasView } from './views/ventas.js?v=8.5';
 import { ComprasView } from './views/compras.js?v=13.9';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
@@ -445,7 +445,7 @@ async function bootCentralReadOnly() {
             (control.matches('[data-purchase-order-control]') || control.closest('#purchaseOrderDialog'));
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
             (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale') ||
-              handler.startsWith('window.ventasModule.removeFromCart('));
+              handler.startsWith('window.pedidosModule.convertOrder(') || handler.startsWith('window.ventasModule.removeFromCart('));
           if (salesControl || purchaseOrderControl || safeNavigation || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
