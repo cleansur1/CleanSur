@@ -40,6 +40,14 @@ export const VentasView = {
               </summary>
               <div class="mt-3 space-y-2 pl-4 text-sm">
                 <p>${Formatter.date(row.created_at)} · ${esc(row.payment_method)} · ${esc(row.payment_status || row.status)}</p>
+                ${row.channel === 'Tienda online' && !['CANCELADO','ENTREGADO'].includes(row.status) ? `
+                  <label class="block">Cambiar medio de pago
+                    <select data-order-payment="${esc(row.number)}" class="rounded border p-1">
+                      <option value="">Elegí el medio</option>
+                      ${['Efectivo contra entrega','Transferencia Bancaria','Cuenta Corriente','Mercado Pago'].map(method => `<option ${row.payment_method === method ? 'selected' : ''}>${method}</option>`).join('')}
+                    </select>
+                  </label>` : ''}
+
                 ${items.length ? '<ul class="list-disc pl-5">' + items.map(item => `
                   <li>${esc(item.quantity)} × ${esc(item.product_name || item.name || item.description || item.product_id)}
                   ${item.unit_price == null ? '' : ' · ' + Formatter.money(Number(item.unit_price)) + ' por unidad'}</li>`).join('') + '</ul>' : '<p>Sin detalle de artículos.</p>'}
@@ -49,6 +57,24 @@ export const VentasView = {
         }).join('');
         container.innerHTML = '<section class="rounded-xl border border-slate-200 bg-white p-5"><h2 class="mb-2 font-bold">Historial de ventas y pedidos</h2>' +
           (cards || '<p>Todavía no hay ventas o pedidos registrados.</p>') + '</section>';
+      for (const select of container.querySelectorAll('[data-order-payment]')) {
+        select.addEventListener('change', async () => {
+          if (!select.value) return;
+          select.disabled = true;
+          try {
+            const result = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_edit_order_payment', {
+              method: 'POST',
+              headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ p_number: select.dataset.orderPayment, p_method: select.value })
+            });
+            if (!result.ok) throw Error((await result.json()).message || 'No se pudo guardar');
+            window.app.showNotification('Medio de pago actualizado', 'success');
+          } catch (error) {
+            window.app.showNotification(error.message, 'error');
+          }
+          await this.renderSalesHistory(container);
+        });
+      }
     } catch (error) {
       container.innerHTML = '<section class="rounded-xl border bg-white p-5"><p role="alert"></p><button type="button" data-retry-sales class="mt-2 text-blue-700 underline">Reintentar</button></section>';
       container.querySelector('[role="alert"]').textContent = error.message;

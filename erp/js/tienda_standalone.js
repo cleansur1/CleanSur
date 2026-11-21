@@ -908,7 +908,7 @@ class TiendaStandaloneApp {
     const mode=document.getElementById('checkoutPaymentMethod')?.value;
     if(mode==='Mercado Pago'){this.showNotice('Mercado Pago no está disponible por el momento.');return;}
     if(!mode){this.showNotice('Seleccioná una forma de pago.');return;}
-    return this.submitOfflineOrder();
+    return this.submitOfflineOrder(mode);
   }
 
   async startMercadoPagoCheckout() {
@@ -1073,7 +1073,7 @@ class TiendaStandaloneApp {
     if (modal) modal.classList.add('hidden');
   }
 
-  async submitOfflineOrder() {
+  async submitOfflineOrder(paymentMethod) {
     if (this.sendingOrder) return;
     const prof = this.customerProfile;
     if (!prof || !this.cart.length) return;
@@ -1089,6 +1089,7 @@ class TiendaStandaloneApp {
         customer_email: prof.email || '',
         delivery_address: prof.address || '',
         delivery_city: city,
+        payment_method: paymentMethod,
         items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
       });
       this.cart = [];
