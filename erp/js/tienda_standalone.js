@@ -62,23 +62,81 @@ class TiendaStandaloneApp {
     this.customerProfile={...profile,email:p.email};this.updateProfileUI();
   }
 
-  async showOrderReceipts(selectNumber=null){
-    const orders=await staycleanCustomerOrders();
-    if(!orders.length){alert('Todavía no tenés pedidos.');return;}
-    const target=selectNumber?orders.find(o=>o.number===selectNumber):null;
-    const selected=target||orders[Number(prompt('Elegí el número del pedido para ver su comprobante:\\n'+orders.map((o,i)=>(i+1)+'. '+o.number+' · $'+Number(o.total).toLocaleString('es-AR')).join('\\n'))-1)];
-    if(!selected)return;
-    const profile=await staycleanCustomerProfile();
-    const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const money=x=>'$ '+Number(x||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
-    const lines=Array.isArray(selected.items)?selected.items:[];
-    const rows=lines.map(item=>'<tr><td>'+esc(item.product_name)+'</td><td>'+esc(item.quantity)+' '+esc(item.unit_name||'')+'</td><td>'+money(item.unit_price)+'</td><td>'+money(item.subtotal)+'</td></tr>').join('');
-    const html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Comprobante '+esc(selected.number)+'</title><style>body{font-family:Arial,sans-serif;color:#172b46;max-width:850px;margin:36px auto;padding:16px}header{border-bottom:3px solid #0e3a6b;padding-bottom:16px}h1{margin:0}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:12px 8px;text-align:left;border-bottom:1px solid #ddd}th{background:#f2f5f9}.total{text-align:right;font-size:23px;font-weight:bold;margin-top:25px}.note{font-size:12px;color:#555;margin-top:30px}.actions{margin-top:20px}@media print{.actions{display:none}body{margin:0}}</style></head><body><header><h1>StayClean</h1><p>Comprobante de compra · No válido como factura fiscal</p></header><h2>Pedido '+esc(selected.number)+'</h2><p>Fecha: '+esc(new Date(selected.date).toLocaleString('es-AR'))+'<br>Estado: '+esc(selected.status)+'<br>Cliente: '+esc(profile.name)+'<br>Entrega: '+esc(profile.address)+', '+esc(profile.city)+'</p><table><thead><tr><th>Producto</th><th>Cantidad</th><th>Precio unitario</th><th>Subtotal</th></tr></thead><tbody>'+rows+'</tbody></table><p class="total">Total: '+money(selected.total)+'</p><p class="note">Este documento acredita el detalle del pedido. No constituye factura electrónica de ARCA ni comprobante de pago.</p><div class="actions"><button onclick="window.print()">Imprimir / Guardar como PDF</button></div></body></html>';
-    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  showStoreDialog(title) {
+    const dialog = document.getElementById('storeDialog');
+    dialog.querySelector('h2').textContent = title;
+    const content = dialog.querySelector('[data-store-dialog-content]');
+    content.replaceChildren();
+    content.classList.remove('whitespace-pre-line');
+    if (!dialog.open) {
+      dialog.returnValue = '';
+      dialog.showModal();
+    }
+    return content;
   }
+
+  showNotice(message, title = 'Aviso de CleanSur') {
+    const content = this.showStoreDialog(title);
+    content.textContent = message;
+    content.classList.add('whitespace-pre-line');
+  }
+
+  confirmTestPayment() {
+    const content = this.showStoreDialog('Continuar a Mercado Pago');
+    content.innerHTML = `
+      <p>La integración está en validación. Para una prueba, usá únicamente una orden y una tarjeta de prueba.</p>
+      <form method="dialog" class="flex justify-end gap-3">
+        <button value="cancel" class="rounded-xl border border-slate-300 px-4 py-2 font-semibold">Cancelar</button>
+        <button value="continue" class="btn-stayclean rounded-xl px-4 py-2 font-bold">Continuar</button>
+      </form>`;
+    const dialog = content.closest('dialog');
+    return new Promise(resolve => {
+      dialog.addEventListener('close', () => resolve(dialog.returnValue === 'continue'), { once: true });
+    });
+  }
+
+  async showOrderReceipts() {
+    const content = this.showStoreDialog('Mis pedidos');
+    content.textContent = 'Cargando pedidos…';
+    const [orders, profile] = await Promise.all([staycleanCustomerOrders(), staycleanCustomerProfile()]);
+    if (!content.closest('dialog').open || content.textContent !== 'Cargando pedidos…') return;
+    const renderOrders = () => {
+      this.showStoreDialog('Mis pedidos');
+      if (!orders.length) {
+        content.textContent = 'Todavía no tenés pedidos.';
+        return;
+      }
+      content.innerHTML = orders.map((order, index) => `
+        <button type="button" data-receipt-index="${index}" class="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-4 py-3 text-left hover:bg-sky-50">
+          <span><strong>Pedido ${escapeCatalogText(order.number)}</strong><br><span class="text-xs text-slate-600">${escapeCatalogText(order.status)} · ${Formatter.money(Number(order.total))}</span></span>
+          <span class="text-xs font-bold text-[#0E3A6B]">Ver comprobante</span>
+        </button>`).join('');
+      for (const button of content.querySelectorAll('[data-receipt-index]')) {
+        button.onclick = () => renderReceipt(orders[Number(button.dataset.receiptIndex)]);
+      }
+    };
+    const renderReceipt = order => {
+      this.showStoreDialog('Comprobante del pedido');
+      const items = Array.isArray(order.items) ? order.items : [];
+      content.innerHTML = `
+        <p class="text-lg font-bold">Pedido ${escapeCatalogText(order.number)}</p>
+        <p>${escapeCatalogText(new Date(order.date).toLocaleString('es-AR'))} · ${escapeCatalogText(order.status)}</p>
+        <p>Cliente: ${escapeCatalogText(profile.name)}<br>Entrega: ${escapeCatalogText([profile.address, profile.city].filter(Boolean).join(', '))}</p>
+        <ul class="divide-y divide-slate-200 border-y border-slate-200">
+          ${items.map(item => `<li class="flex justify-between gap-4 py-2"><span>${escapeCatalogText(item.quantity)} × ${escapeCatalogText(item.product_name)} ${escapeCatalogText(item.unit_name)}</span><strong>${Formatter.money(Number(item.subtotal))}</strong></li>`).join('')}
+        </ul>
+        <p class="text-right text-lg font-bold">Total ${Formatter.money(Number(order.total))}</p>
+        <p class="text-xs text-slate-600">Comprobante de pedido. Sin validez como factura fiscal ni comprobante de pago.</p>
+        <div class="flex flex-wrap justify-between gap-3">
+          <button type="button" data-back-orders class="font-semibold text-[#0E3A6B] underline">Volver a mis pedidos</button>
+          <button type="button" data-print-receipt class="btn-stayclean rounded-xl px-4 py-2 font-bold">Imprimir / Guardar PDF</button>
+        </div>`;
+      content.querySelector('[data-back-orders]').onclick = renderOrders;
+      content.querySelector('[data-print-receipt]').onclick = () => window.print();
+    };
+    renderOrders();
+  }
+
   setupAccountDialog() {
     const dialog = document.getElementById('customerAccountDialog');
     if (!dialog) return;
@@ -101,7 +159,7 @@ class TiendaStandaloneApp {
         try {
           await (action === 'profile' ? this.openProfileModal() : this.showOrderReceipts());
         } catch (error) {
-          this.showAccountMode('account', error.message);
+          this.showNotice(error.message, action === 'orders' ? 'Mis pedidos' : 'Mis datos');
         }
       } else {
         this.showAccountMode(action);
@@ -254,7 +312,7 @@ class TiendaStandaloneApp {
       this.products = [];
       this.applyFilters();
       console.error('No se pudo cargar el catálogo de Supabase', error);
-      alert('No se pudo conectar al catálogo de StayClean. Intentá nuevamente más tarde.');
+      this.showNotice('No se pudo conectar al catálogo de StayClean. Intentá nuevamente más tarde.');
     }
     return;
     // Cargar productos del ERP con enriquecimiento de catálogo estilo Voltra
@@ -639,7 +697,7 @@ class TiendaStandaloneApp {
 
     const existing = this.cart.find(item => item.id === productId);
     if (!Number.isInteger(qty) || qty < 1 || qty + (existing?.quantity ?? 0) > Number(p.current_stock)) {
-      alert('Revisá la cantidad disponible para este producto.');
+      this.showNotice('Revisá la cantidad disponible para este producto.');
       return false;
     }
     if (existing) {
@@ -812,14 +870,14 @@ class TiendaStandaloneApp {
       updated_at: new Date().toISOString()
     };
 
-    try {await this.saveCustomerProfileData(profile);} catch(err){alert(err.message);return;}
+    try {await this.saveCustomerProfileData(profile);} catch(err){this.showNotice(err.message);return;}
     this.closeProfileModal();
 
     // Si tiene productos en el carrito y venía del checkout, abrir confirmación
     if (this.cart.length > 0) {
       this.openOrderConfirmation();
     } else {
-      alert('¡Perfil de entrega guardado correctamente!');
+      this.showNotice('¡Perfil de entrega guardado correctamente!');
     }
   }
 
@@ -828,7 +886,7 @@ class TiendaStandaloneApp {
     const state=params.get('mp'), requestId=params.get('request_id');
     if(!state || !requestId) return;
     const token=await staycleanAuthToken();
-    if(!token){alert('Iniciá sesión para consultar el resultado de tu pago. Conservamos el enlace de retorno para que puedas verificarlo. No vuelvas a pagar hasta hacerlo.');return;}
+    if(!token){this.showNotice('Iniciá sesión para consultar el resultado de tu pago. Conservamos el enlace de retorno para que puedas verificarlo. No vuelvas a pagar hasta hacerlo.');return;}
     try {
       const res=await fetch(STAYCLEAN_SUPABASE_URL+'/functions/v1/get-mp-checkout-status',{
         method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},
@@ -839,31 +897,32 @@ class TiendaStandaloneApp {
       if(data.status==='approved'||data.status==='paid'||data.status==='completed'){
         history.replaceState(null,'',location.pathname);
         this.cart=[];this.saveCart();this.pendingRequestId=null;sessionStorage.removeItem('stayclean_pending_order_id');
-        alert('Pago aprobado. Pedido '+(data.order_number||'registrado')+'. Podés verlo desde Mi cuenta → PEDIDOS.');
+        this.showNotice('Pago aprobado. Pedido '+(data.order_number||'registrado')+'. Podés verlo desde Mi cuenta → PEDIDOS.');
       } else {
-        alert('Estado del pago: '+(data.mp_status||data.status||'pendiente')+'. Conservá este enlace para volver a consultar. No repitas el pago hasta verificar su estado.');
+        this.showNotice('Estado del pago: '+(data.mp_status||data.status||'pendiente')+'. Conservá este enlace para volver a consultar. No repitas el pago hasta verificar su estado.');
       }
-    } catch(e){alert('No pudimos verificar el pago: '+e.message+'. Consultá el pedido antes de intentar pagar nuevamente.');}
+    } catch(e){this.showNotice('No pudimos verificar el pago: '+e.message+'. Consultá el pedido antes de intentar pagar nuevamente.');}
   }
 
   async confirmSelectedPayment() {
     const mode=document.getElementById('checkoutPaymentMethod')?.value;
     if(mode==='Mercado Pago')return this.startMercadoPagoCheckout();
-    if(!mode){alert('Seleccioná una forma de pago.');return;}
+    if(!mode){this.showNotice('Seleccioná una forma de pago.');return;}
     return this.submitOfflineOrder();
   }
 
   async startMercadoPagoCheckout() {
     if(this.sendingOrder)return;
-    if(!this.cart.length){alert('Tu carrito está vacío.');return;}
+    if(!this.cart.length){this.showNotice('Tu carrito está vacío.');return;}
     const token=await staycleanAuthToken();
-    if(!token){alert('Iniciá sesión antes de pagar.');await this.openAccountDialog();return;}
+    if(!token){await this.openAccountDialog();return;}
     if(!this.customerProfile?.name||!this.customerProfile?.phone||!this.customerProfile?.address){this.openProfileModal();return;}
-    if(!confirm('Mercado Pago está en fase de pruebas. No uses dinero real hasta que se confirme el circuito completo de acreditación y stock. ¿Continuar con la prueba?'))return;
-    this.sendingOrder=true;
-    const requestId=this.pendingRequestId||(this.pendingRequestId=crypto.randomUUID());
-    sessionStorage.setItem('stayclean_pending_order_id',requestId);
+    if (this.sendingOrder) return;
+    this.sendingOrder = true;
     try {
+      if (!await this.confirmTestPayment()) return;
+      const requestId = this.pendingRequestId || (this.pendingRequestId = crypto.randomUUID());
+      sessionStorage.setItem('stayclean_pending_order_id', requestId);
       const response=await fetch(STAYCLEAN_SUPABASE_URL+'/functions/v1/create-mp-checkout',{
         method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},
         body:JSON.stringify({request_id:requestId,items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity}))})
@@ -873,14 +932,14 @@ class TiendaStandaloneApp {
       const checkout=new URL(data.checkout_url||'');
       if(checkout.protocol!=='https:' || !/(^|\.)mercadopago\.com(\.ar)?$/.test(checkout.hostname))throw Error('Mercado Pago no devolvió un enlace de pago válido');
       location.assign(data.checkout_url);
-    }catch(e){alert('No se inició el pago ni se confirmó el pedido: '+e.message);}
+    }catch(e){this.showNotice('No se inició el pago ni se confirmó el pedido: '+e.message);}
     finally{this.sendingOrder=false;}
   }
 
   async proceedToCheckout() {
     if(!await staycleanAuthToken()){this.closeCart();await this.openAccountDialog();return;}
     if (this.cart.length === 0) {
-      alert('Tu carrito está vacío. Agregá productos antes de continuar.');
+      this.showNotice('Tu carrito está vacío. Agregá productos antes de continuar.');
       return;
     }
 
@@ -1038,10 +1097,10 @@ class TiendaStandaloneApp {
       sessionStorage.removeItem('stayclean_pending_order_id');
       this.closeOrderConfirmation();
       await this.loadProducts();
-      alert(`Pedido ${savedOrder.order_number} registrado en CleanSur. Podés ver el comprobante en Mi cuenta → Mis pedidos.`);
+      this.showNotice(`Pedido ${savedOrder.order_number} registrado en CleanSur. Podés ver el comprobante en Mi cuenta → Mis pedidos.`);
     } catch (error) {
       console.error('Error registrando pedido en Supabase', error);
-      alert('No se registró el pedido: ' + error.message + '. El carrito permanece intacto.');
+      this.showNotice('No se registró el pedido: ' + error.message + '. El carrito permanece intacto.');
     } finally {
       this.sendingOrder = false;
     }
