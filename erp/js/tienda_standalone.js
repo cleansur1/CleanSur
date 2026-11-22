@@ -974,6 +974,15 @@ class TiendaStandaloneApp {
             <input id="assistedSearch" type="search" placeholder="Escribí para buscar..." class="w-full border rounded-lg p-3" />
             <label class="block text-sm font-bold">Cliente</label>
             <select id="assistedCustomer" class="w-full border rounded-lg p-3"><option value="">Seleccioná un cliente</option></select>
+            <button type="button" id="assistedNewToggle" class="text-sm font-bold text-blue-700 underline">+ Crear cliente nuevo</button>
+            <div id="assistedNewForm" class="hidden space-y-2 p-3 rounded-lg bg-slate-50">
+              <input id="assistedNewName" class="w-full border rounded-lg p-2" placeholder="Nombre y apellido / comercio" />
+              <input id="assistedNewPhone" class="w-full border rounded-lg p-2" placeholder="Teléfono WhatsApp" />
+              <input id="assistedNewAddress" class="w-full border rounded-lg p-2" placeholder="Dirección de entrega" />
+              <select id="assistedNewCity" class="w-full border rounded-lg p-2"><option value="Caviahue">Caviahue</option><option value="Copahue">Copahue</option></select>
+              <input id="assistedNewEmail" class="w-full border rounded-lg p-2" placeholder="Correo (opcional)" />
+              <button id="assistedCreateCustomer" type="button" class="w-full bg-blue-700 text-white rounded-lg p-2 font-bold">Guardar cliente y seleccionarlo</button>
+            </div>
             <div id="assistedCustomerInfo" class="text-sm text-slate-600"></div>
             <div id="assistedOrderTotal" class="font-bold text-lg text-[#0E3A6B]"></div>
             <label class="block text-sm font-bold">Forma de pago</label>
@@ -988,6 +997,8 @@ class TiendaStandaloneApp {
           </div>`;
         document.body.appendChild(modal);
         modal.querySelector('#assistedClose').onclick = () => modal.remove();
+        modal.querySelector('#assistedNewToggle').onclick = () => modal.querySelector('#assistedNewForm').classList.toggle('hidden');
+        modal.querySelector('#assistedCreateCustomer').onclick = () => this.createAssistedCustomer();
         modal.querySelector('#assistedSearch').oninput = () => this.searchAssistedCustomers();
         modal.querySelector('#assistedCustomer').onchange = () => this.selectAssistedCustomer();
         modal.querySelector('#assistedConfirm').onclick = () => this.submitAssistedOrder();
@@ -997,6 +1008,35 @@ class TiendaStandaloneApp {
       this.assistedCustomers = [];
       await this.searchAssistedCustomers();
     } catch (error) { this.showNotice(error.message); }
+  }
+
+  async createAssistedCustomer() {
+    const modal=document.getElementById('assistedCheckoutModal');
+    if(!modal)return;
+    const error=modal.querySelector('#assistedError');
+    const button=modal.querySelector('#assistedCreateCustomer');
+    button.disabled=true;
+    try {
+      const id=await staycleanCustomerRpc('stayclean_staff_assisted_create_customer',{
+        p_name:modal.querySelector('#assistedNewName').value.trim(),
+        p_phone:modal.querySelector('#assistedNewPhone').value.trim(),
+        p_address:modal.querySelector('#assistedNewAddress').value.trim(),
+        p_city:modal.querySelector('#assistedNewCity').value,
+        p_email:modal.querySelector('#assistedNewEmail').value.trim()
+      });
+      modal.querySelector('#assistedSearch').value='';
+      await this.searchAssistedCustomers();
+      const index=this.assistedCustomers.findIndex(c=>c.id===id);
+      if(index<0) {
+        modal.querySelector('#assistedSearch').value=modal.querySelector('#assistedNewName').value.trim();
+        await this.searchAssistedCustomers();
+      }
+      const chosen=this.assistedCustomers.findIndex(c=>c.id===id);
+      if(chosen<0)throw Error('Cliente creado. Buscalo por nombre para seleccionarlo.');
+      modal.querySelector('#assistedCustomer').value=String(chosen);
+      modal.querySelector('#assistedNewForm').classList.add('hidden');
+      await this.selectAssistedCustomer();
+    } catch(e){error.textContent=e.message;} finally {button.disabled=false;}
   }
 
   async searchAssistedCustomers() {
