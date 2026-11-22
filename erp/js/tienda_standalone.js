@@ -851,7 +851,6 @@ class TiendaStandaloneApp {
       document.getElementById('profAddress').value = this.customerProfile.address || '';
       document.getElementById('profZone').value = this.customerProfile.zone || '';
       document.getElementById('profTaxId').value = this.customerProfile.tax_id || '';
-      document.getElementById('profInvoiceType').value = this.customerProfile.invoice_type || 'B';
       document.getElementById('profNotes').value = this.customerProfile.notes || '';
     }
 
@@ -873,7 +872,7 @@ class TiendaStandaloneApp {
       address: document.getElementById('profAddress').value.trim(),
       zone: document.getElementById('profZone').value.trim(),
       tax_id: document.getElementById('profTaxId').value.trim(),
-      invoice_type: document.getElementById('profInvoiceType').value,
+      invoice_type: 'B',
       notes: document.getElementById('profNotes').value.trim(),
       updated_at: new Date().toISOString()
     };
@@ -1029,8 +1028,8 @@ class TiendaStandaloneApp {
             </div>
             ${prof.tax_id ? `
               <div>
-                <span class="text-slate-400 block">Facturación:</span>
-                <span class="text-slate-700">Factura ${prof.invoice_type || 'B'} • CUIT/DNI: ${prof.tax_id}</span>
+                <span class="text-slate-400 block">CUIT / DNI:</span>
+                <span class="text-slate-700">${prof.tax_id}</span>
               </div>
             ` : ''}
             ${prof.notes ? `
