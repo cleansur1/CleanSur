@@ -386,9 +386,94 @@ export const ClientesView = {
       </div>
     `;
 
+    if (window.app.centralReadOnly) {
+      const panel = document.createElement('section');
+      panel.className = 'bg-white p-5 rounded-xl border border-slate-200 space-y-3';
+      container.firstElementChild.children[0].after(panel);
+      this.renderInternalWithdrawals(panel, customer);
+    }
     const creditButton = container.querySelector('[data-customer-credit]');
     creditButton?.addEventListener('click', () => this.setStoreCredit(customer, creditButton));
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  async renderInternalWithdrawals(panel, customer) {
+    const token = getAdminSession()?.access_token || sessionStorage.getItem('stayclean_staff_access_token');
+    const heading = document.createElement('h2');
+    heading.className = 'font-bold text-slate-800';
+    heading.textContent = 'Retiros internos al costo';
+    panel.replaceChildren(heading);
+    const status = document.createElement('p');
+    status.setAttribute('role', 'status');
+    status.textContent = 'Cargando retiros…';
+    panel.append(status);
+
+    const request = async (args = {}) => {
+      const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_internal_withdrawal', {
+        method: 'POST',
+        headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_customer_id: customer.id, ...args })
+      });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.message || 'No se pudo actualizar el retiro');
+      return result;
+    };
+    const button = (label, action) => {
+      const control = document.createElement('button');
+      control.type = 'button';
+      control.dataset.customerWithdrawal = '';
+      control.className = 'px-3 py-2 rounded-lg bg-[#0E3A6B] text-white text-sm font-semibold';
+      control.textContent = label;
+      control.addEventListener('click', async () => {
+        control.disabled = true;
+        try { await action(); } catch (error) { status.textContent = error.message; }
+        finally { control.disabled = false; }
+      });
+      return control;
+    };
+    try {
+      const data = await request();
+      status.textContent = 'Total consumido al costo: ' + Formatter.money(data.total);
+      panel.append(button(data.enabled ? 'Deshabilitar retiros internos' : 'Habilitar retiros internos', async () => {
+        await request({ p_enabled: !data.enabled });
+        await this.renderInternalWithdrawals(panel, customer);
+      }));
+      if (data.enabled) {
+        const fields = document.createElement('div');
+        fields.className = 'flex flex-wrap items-end gap-2';
+        fields.innerHTML = '<label class="text-sm">Producto<select class="block border rounded p-2" required></select></label><label class="text-sm">Cantidad<input class="block border rounded p-2 w-24" type="number" min="1" max="10000" step="1" value="1" required></label><label class="text-sm">Alojamiento<input class="block border rounded p-2" type="text" maxlength="150" required></label>';
+        const [product, quantity, destination] = fields.querySelectorAll('select,input');
+        product.add(new Option('Seleccioná un producto', ''));
+        for (const row of db.getProducts().filter(row => row.active && Number(row.caviahue_cost) > 0 && Number(row.sale_to_base_factor) > 0)) {
+          product.add(new Option(row.sku + ' · ' + row.name + ' · ' + Formatter.money(row.caviahue_cost * row.sale_to_base_factor), row.id));
+        }
+        let pending;
+        fields.append(button('Registrar retiro', async () => {
+          if (![product, quantity, destination].every(input => input.reportValidity()) || !destination.value.trim()) {
+            status.textContent = 'Completá el producto, la cantidad y el alojamiento.';
+            return;
+          }
+          const args = { p_product_id: product.value, p_quantity: Number(quantity.value), p_destination: destination.value.trim() };
+          const key = JSON.stringify(args);
+          if (pending?.key !== key) pending = { key, id: crypto.randomUUID() };
+          await request({ ...args, p_request_id: pending.id });
+          await this.renderInternalWithdrawals(panel, customer);
+        }));
+        panel.append(fields);
+      }
+      const history = document.createElement('ul');
+      history.className = 'divide-y text-sm';
+      for (const row of data.history) {
+        const item = document.createElement('li');
+        item.className = 'py-2';
+        item.textContent = [new Date(row.date).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }),
+          row.destination, row.quantity + ' ' + (row.unit || 'un.' ) + ' × ' + row.name, Formatter.money(row.total)].join(' · ');
+        history.append(item);
+      }
+      panel.append(history);
+    } catch (error) {
+      status.textContent = error.message;
+    }
   },
 
   async setStoreCredit(customer, button) {
