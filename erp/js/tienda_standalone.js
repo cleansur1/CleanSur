@@ -396,7 +396,14 @@ class TiendaStandaloneApp {
     this.applyFilters();
   }
 
-  resetFilters() {
+  togglePromos() {
+    const enabled = !this.promosOnly;
+    this.resetFilters(enabled);
+  }
+
+  resetFilters(promosOnly = false) {
+    this.promosOnly = promosOnly;
+    document.getElementById('filterPromos')?.setAttribute('aria-pressed', String(promosOnly));
     this.activeFilters = {
       availability: 'all',
       price: 'all',
@@ -425,11 +432,12 @@ class TiendaStandaloneApp {
     this.activeFilters.category = cat;
     this.activeFilters.sort = sort;
 
-    const hasActiveFilters = avail !== 'all' || price !== 'all' || cat !== 'all' || aroma !== '' || this.activeFilters.search;
+    const hasActiveFilters = this.promosOnly || avail !== 'all' || price !== 'all' || cat !== 'all' || aroma !== '' || this.activeFilters.search;
     const btnClear = document.getElementById('btnClearFilters');
     if (btnClear) btnClear.classList.toggle('hidden', !hasActiveFilters);
 
     let list = this.products.filter(p => {
+      if (this.promosOnly && !/^PROMO-/i.test(p.sku || '')) return false;
       if (aroma && !this.catalogAromas.get(p.id)?.has(aroma)) return false;
       // 1. Disponibilidad
       if (avail === 'in_stock' && !p.in_stock) return false;
