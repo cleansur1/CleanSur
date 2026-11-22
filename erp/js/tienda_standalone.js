@@ -14,6 +14,7 @@ class TiendaStandaloneApp {
     this.cart = this.loadCart();
     this.pendingRequestId = sessionStorage.getItem('stayclean_pending_order_id') || null;
     this.customerProfile = null;
+    this.isStaff = false;
     this.activeFilters = {
       availability: 'all',
       price: 'all',
@@ -950,8 +951,9 @@ class TiendaStandaloneApp {
     const button = document.getElementById('btnAssistedCheckout');
     if (!button) return;
     button.classList.add('hidden');
+    this.isStaff = false;
     try {
-      if (await staycleanAuthToken() && await staycleanCustomerRpc('stayclean_is_staff')) button.classList.remove('hidden');
+      if (await staycleanAuthToken() && await staycleanCustomerRpc('stayclean_is_staff')) { this.isStaff = true; button.classList.remove('hidden'); }
     } catch (error) { console.warn('Venta asistida no habilitada:', error.message); }
   }
 
@@ -1156,6 +1158,7 @@ class TiendaStandaloneApp {
       }
       if (this.customerProfile !== profile) return;
     }
+    await this.checkAssistedAccess();
     const modal = document.getElementById('orderConfirmationModal');
     const content = document.getElementById('orderConfirmationContent');
     if (!modal || !content) return;
@@ -1200,7 +1203,7 @@ class TiendaStandaloneApp {
             <div>
               <span class="text-slate-400 block">Cliente:</span>
               <strong class="text-slate-800">${escapeCatalogText(prof.name)}</strong>
-              <button type="button" onclick="window.tiendaApp.openAssistedCheckout()" class="block mt-1 text-blue-700 font-bold underline text-[11px]">Cambiar cliente · Venta asistida</button>
+              ${this.isStaff ? '<button type="button" onclick="window.tiendaApp.openAssistedCheckout()" class="block mt-1 text-blue-700 font-bold underline text-[11px]">Cambiar cliente · Venta asistida</button>' : ''}
             </div>
             <div>
               <span class="text-slate-400 block">Contacto WhatsApp:</span>
