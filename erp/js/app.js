@@ -3,7 +3,7 @@ import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=8.1';
-import { VentasView } from './views/ventas.js?v=8.5';
+import { VentasView } from './views/ventas.js?v=8.6';
 import { ComprasView } from './views/compras.js?v=13.9';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
@@ -424,7 +424,7 @@ async function bootCentralReadOnly() {
       document.body.append(exit);
       // Bloqueo de controles de escritura: navegación permitida, formularios y acciones no.
       document.addEventListener('click', e => {
-        if (e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link')) return;
+        if (e.target.closest('dialog form[method=dialog]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link')) return;
         const control = e.target.closest('button, input[type=submit], a[onclick], [role=button]');
         if (control) {
           const handler = control.getAttribute('onclick') || '';
@@ -444,14 +444,14 @@ async function bootCentralReadOnly() {
           const purchaseOrderControl = app.currentRoute === 'ordenes_compra' &&
             (control.matches('[data-purchase-order-control]') || control.closest('#purchaseOrderDialog'));
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
-            (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale') ||
+            (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale, [data-history-action]') ||
               handler.startsWith('window.pedidosModule.convertOrder(') || handler.startsWith('window.ventasModule.removeFromCart('));
           if (salesControl || purchaseOrderControl || safeNavigation || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }
       }, true);
-      document.addEventListener('submit', e => { if ((app.currentRoute === 'productos' && e.target.matches('#productForm[data-product-edit="true"]')) || (e.target.matches('#centralPurchaseDetailModal [data-aroma-editor] form') && app.currentRoute==='compras') || (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
+      document.addEventListener('submit', e => { if (e.target.matches('dialog form[method=dialog]') || (app.currentRoute === 'productos' && e.target.matches('#productForm[data-product-edit="true"]')) || (e.target.matches('#centralPurchaseDetailModal [data-aroma-editor] form') && app.currentRoute==='compras') || (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
     } catch (err) {
       error.textContent = err.message || 'No se pudo iniciar la sesión';
       await signOutAdmin().catch(()=>{});

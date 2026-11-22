@@ -4,7 +4,8 @@
 import { db } from '../db.js';
 import { getAdminSession } from '../supabase_admin.js';
 import { Formatter } from '../models.js';
-import { PedidosView } from './pedidos.js?v=6.1';
+import { PedidosView } from './pedidos.js?v=6.2';
+import { salesDialog } from './sales_dialog.js';
 
 let cartItems = [];
 let selectedCustomer = null;
@@ -31,50 +32,68 @@ export const VentasView = {
         const rows = await response.json();
         if (response.status === 401 || response.status === 403) throw Error('La sesión de CleanSur venció o perdió acceso. Volvé a ingresar al ERP.');
         if (!response.ok || !Array.isArray(rows)) throw Error('No se pudo cargar el historial.');
-        const cards = rows.map(row => {
-          const items = Array.isArray(row.items) ? row.items : [];
-          return `
-            <details class="border-b border-slate-200 py-3">
-              <summary class="cursor-pointer font-medium">
-                Comprobante ${esc(row.number)} · ${esc(row.channel)} · ${esc(row.customer)} · ${Formatter.money(Number(row.total))}
-              </summary>
-              <div class="mt-3 space-y-2 pl-4 text-sm">
-                <p>${Formatter.date(row.created_at)} · ${esc(row.payment_method)} · ${esc(row.payment_status || row.status)}</p>
-                ${row.channel === 'Tienda online' && !['CANCELADO','ENTREGADO'].includes(row.status) ? `
-                  <label class="block">Cambiar medio de pago
-                    <select data-order-payment="${esc(row.number)}" class="rounded border p-1">
-                      <option value="">Elegí el medio</option>
-                      ${['Efectivo contra entrega','Transferencia Bancaria','Cuenta Corriente','Mercado Pago'].map(method => `<option ${row.payment_method === method ? 'selected' : ''}>${method}</option>`).join('')}
-                    </select>
-                  </label>` : ''}
-
-                ${items.length ? '<ul class="list-disc pl-5">' + items.map(item => `
-                  <li>${esc(item.quantity)} × ${esc(item.product_name || item.name || item.description || item.product_id)}
-                  ${item.unit_price == null ? '' : ' · ' + Formatter.money(Number(item.unit_price)) + ' por unidad'}</li>`).join('') + '</ul>' : '<p>Sin detalle de artículos.</p>'}
-                ${row.fiscal_reference ? '<p>Referencia ARCA: ' + esc(row.fiscal_reference) + '</p>' : ''}
-              </div>
-            </details>`;
+        const cards = rows.map((row, index) => {
+          const editable = (row.channel === 'Tienda online' || String(row.number).startsWith('VT-PED-'))
+            && !row.fiscal_reference && !['CANCELADO', 'ANULADA'].includes(row.status)
+            && (!row.payment_status || row.payment_status === 'PENDIENTE');
+          return `<article class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 py-3">
+            <div><strong>${esc(row.number)} · ${esc(row.customer)}</strong>
+              <p class="text-xs text-slate-600">${esc(row.channel)} · ${Formatter.money(Number(row.total))} · ${esc(row.status)}</p>
+            </div>
+            <div class="flex gap-2">
+              ${(editable ? [['view','Ver','eye'],['edit','Editar','pencil'],['void','Eliminar (anular)','trash-2']] : [['view','Ver','eye']]).map(([action,label,icon]) =>
+                `<button type="button" data-history-action="${action}" data-history-row="${index}" aria-label="${label}" title="${label}" class="rounded-lg border p-2 text-[#0E3A6B] hover:bg-sky-50"><i data-lucide="${icon}" class="h-4 w-4"></i></button>`).join('')}
+            </div>
+          </article>`;
         }).join('');
         container.innerHTML = '<section class="rounded-xl border border-slate-200 bg-white p-5"><h2 class="mb-2 font-bold">Historial de ventas y pedidos</h2>' +
           (cards || '<p>Todavía no hay ventas o pedidos registrados.</p>') + '</section>';
-      for (const select of container.querySelectorAll('[data-order-payment]')) {
-        select.addEventListener('change', async () => {
-          if (!select.value) return;
-          select.disabled = true;
-          try {
-            const result = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_edit_order_payment', {
-              method: 'POST',
-              headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ p_number: select.dataset.orderPayment, p_method: select.value })
-            });
-            if (!result.ok) throw Error((await result.json()).message || 'No se pudo guardar');
-            window.app.showNotification('Medio de pago actualizado', 'success');
-          } catch (error) {
-            window.app.showNotification(error.message, 'error');
-          }
-          await this.renderSalesHistory(container);
-        });
-      }
+        window.lucide?.createIcons();
+        for (const button of container.querySelectorAll('[data-history-action]')) {
+          button.onclick = async () => {
+            const row = rows[Number(button.dataset.historyRow)];
+            const action = button.dataset.historyAction;
+            if (action === 'view') {
+              const detail = document.createElement('div');
+              const items = Array.isArray(row.items) ? row.items : [];
+              detail.innerHTML = `<p>${esc(row.customer)} · ${Formatter.date(row.created_at)}</p>
+                <p>${esc(row.payment_method)} · ${esc(row.payment_status || row.status)}</p>
+                <ul class="my-3 space-y-1 border-y py-3">${items.map(item =>
+                  `<li>${esc(item.quantity)} × ${esc(item.product_name || item.name || item.product_id)}
+                    ${item.unit_price == null ? '' : ' · ' + Formatter.money(Number(item.unit_price)) + ' por unidad'}</li>`).join('')}</ul>
+                <strong>Total ${Formatter.money(Number(row.total))}</strong>
+                ${row.fiscal_reference ? '<p>Referencia ARCA: ' + esc(row.fiscal_reference) + '</p>' : ''}`;
+              await salesDialog('Comprobante ' + row.number, detail);
+              return;
+            }
+            const methods = ['Efectivo contra entrega','Transferencia Bancaria','Cuenta Corriente','Mercado Pago'];
+            const field = action === 'edit' ? document.createElement('select') : null;
+            if (field) {
+              field.className = 'w-full rounded-lg border p-2';
+              field.required = true;
+              field.setAttribute('aria-label','Medio de pago');
+              field.add(new Option('Elegí el medio de pago',''));
+              for (const method of methods) field.add(new Option(method,method));
+              field.value = methods.includes(row.payment_method) ? row.payment_method : '';
+            }
+            const result = await salesDialog((field ? 'Editar ' : 'Anular ') + row.number,
+              field ? 'Actualizá el medio de pago del comprobante.' : 'Se reintegrará el stock y el comprobante quedará registrado como anulado.',
+              field ? 'Guardar' : 'Anular', field);
+            if (!result) return;
+            try {
+              const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_manage_history', {
+                method: 'POST',
+                headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ p_number: row.number, p_action: action, p_method: field ? result : null })
+              });
+              if (!response.ok) throw Error((await response.json()).message || 'No se pudo guardar.');
+              if (action === 'void') location.reload();
+              else await this.renderSalesHistory(container);
+            } catch (error) {
+              await salesDialog('No se pudo guardar', error.message);
+            }
+          };
+        }
     } catch (error) {
       container.innerHTML = '<section class="rounded-xl border bg-white p-5"><p role="alert"></p><button type="button" data-retry-sales class="mt-2 text-blue-700 underline">Reintentar</button></section>';
       container.querySelector('[role="alert"]').textContent = error.message;

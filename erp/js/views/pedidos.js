@@ -1,6 +1,7 @@
 // Módulo de Pedidos de Clientes para Limpieza Caviahue
 // Estados: Nuevo, Preparando, Listo, Entregado. Conversión directa a Venta Facturada.
 
+import { salesDialog } from './sales_dialog.js';
 import { db } from '../db.js';
 import { getAdminSession } from '../supabase_admin.js';
 import { STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from '../supabase_public.js';
@@ -87,7 +88,7 @@ window.pedidosModule = {
     const message = central
       ? '¿Registrar la entrega y convertir el pedido en venta? Se conserva el estado de pago y el stock ya descontado.'
       : '¿Convertir este pedido en venta y registrar el movimiento de stock?';
-    if (!confirm(message)) return;
+    if (!await salesDialog('Convertir en venta', message, 'Confirmar entrega')) return;
     button.disabled = true;
     try {
       let sale;
@@ -109,7 +110,7 @@ window.pedidosModule = {
       window.app.showNotification('Venta ' + sale.sale_number + ' registrada', 'success');
       window.app.navigate('ventas');
     } catch (error) {
-      alert(error.message);
+      await salesDialog('No se pudo convertir el pedido', error.message);
     } finally {
       button.disabled = false;
     }
