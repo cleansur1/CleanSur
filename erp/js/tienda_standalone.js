@@ -977,8 +977,8 @@ class TiendaStandaloneApp {
             <input id="assistedSearch" type="search" placeholder="Escribí para buscar..." class="w-full border rounded-lg p-3" />
             <label class="block text-sm font-bold">Cliente</label>
             <select id="assistedCustomer" class="w-full border rounded-lg p-3"><option value="">Seleccioná un cliente</option></select>
-            <button type="button" id="assistedNewToggle" class="text-sm font-bold text-blue-700 underline">+ Crear cliente nuevo</button>
-            <div id="assistedNewForm" class="hidden space-y-2 p-3 rounded-lg bg-slate-50">
+            <button type="button" id="assistedNewToggle" class="text-sm font-bold text-blue-700 underline">Mostrar / ocultar formulario de cliente nuevo</button>
+            <div id="assistedNewForm" class="space-y-2 p-3 rounded-lg bg-slate-50">
               <input id="assistedNewName" class="w-full border rounded-lg p-2" placeholder="Nombre y apellido / comercio" />
               <input id="assistedNewDni" class="w-full border rounded-lg p-2" inputmode="numeric" placeholder="DNI (solo números)" />\n              <input id="assistedNewPhone" class="w-full border rounded-lg p-2" placeholder="Teléfono WhatsApp" />
               <input id="assistedNewAddress" class="w-full border rounded-lg p-2" placeholder="Dirección de entrega" />
