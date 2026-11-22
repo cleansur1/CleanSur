@@ -1,3 +1,4 @@
+import { bindArchive, isCancelled } from './archive.js?v=1';
 // Módulo de Órdenes de Compra para Limpieza Caviahue
 // Estados: Borrador, Enviada, Confirmada, Recibida. Al recibir mercadería, transforma en Compra con Costo Caviahue.
 
@@ -83,7 +84,7 @@ export const OrdenesCompraView = {
               </thead>
               <tbody class="divide-y divide-slate-100">
                 ${pos.map(po => `
-                  <tr class="hover:bg-slate-50 transition">
+                  <tr data-archive-row ${isCancelled(po.status) ? `data-archive-id="${escape(po.id)}"` : ''} class="hover:bg-slate-50 transition">
                     <td class="py-3 px-4 font-mono font-bold text-slate-800">${escape(numberOf(po))}</td>
                     <td class="py-3 px-4 text-slate-600">${Formatter.date(po.date)}</td>
                     <td class="py-3 px-4 font-medium text-slate-900">${escape(po.supplier_name)}</td>
@@ -95,7 +96,7 @@ export const OrdenesCompraView = {
                     </td>
                     <td class="py-3 px-4 text-right font-bold text-slate-900">${Formatter.money(totalOf(po))}</td>
                     <td class="py-3 px-4 text-center">
-                      <div class="flex justify-center gap-2 whitespace-nowrap" data-order-id="${escape(po.id)}">
+                      <div class="flex justify-center gap-2 whitespace-nowrap" data-order-id="${escape(po.id)}" data-archive-actions>
                         <button type="button" data-purchase-order-control data-view-order aria-label="Ver orden" title="Ver" class="rounded border p-2"><i data-lucide="eye" class="h-4 w-4"></i></button>
                         ${canManage(po) ? `
                           <button type="button" data-purchase-order-control data-edit-order aria-label="Editar orden" title="Editar" class="rounded border p-2 text-blue-700"><i data-lucide="pencil" class="h-4 w-4"></i></button>
@@ -120,6 +121,7 @@ export const OrdenesCompraView = {
       </div>
     `;
 
+    bindArchive(container, 'purchase-orders');
     container.querySelector('#newPurchaseOrder').onclick = () => this.openNewOrder(container);
     for (const actions of container.querySelectorAll('[data-order-id]')) {
       const order = pos.find(row => String(row.id) === actions.dataset.orderId);
