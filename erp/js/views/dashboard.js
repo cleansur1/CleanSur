@@ -304,62 +304,6 @@ export const DashboardView = {
           </div>
         </div>
 
-        <!-- Gráficos Principales -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Gráfico 1: Ventas y CMV por Día -->
-          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <div>
-                <h3 class="text-sm font-bold text-slate-800">Evolución de Ventas vs Costo (CMV)</h3>
-                <p class="text-xs text-slate-500">Comportamiento diario de ingresos y costo de mercadería vendida</p>
-              </div>
-              <span class="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Histórico</span>
-            </div>
-            <div class="h-64">
-              <canvas id="chartVentasDia"></canvas>
-            </div>
-          </div>
-
-          <!-- Gráfico 2: Ventas por Categoría -->
-          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <div>
-                <h3 class="text-sm font-bold text-slate-800">Distribución de Ventas por Categoría</h3>
-                <p class="text-xs text-slate-500">Participación en la facturación total del negocio</p>
-              </div>
-            </div>
-            <div class="h-64">
-              <canvas id="chartCategorias"></canvas>
-            </div>
-          </div>
-
-          <!-- Gráfico 3: Ventas por Tipo de Cliente -->
-          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <div>
-                <h3 class="text-sm font-bold text-slate-800">Ventas según Tipo de Cliente</h3>
-                <p class="text-xs text-slate-500">Alojamientos, Gastronomía, Administradores, Comercios y Particulares</p>
-              </div>
-            </div>
-            <div class="h-64">
-              <canvas id="chartClientes"></canvas>
-            </div>
-          </div>
-
-          <!-- Gráfico 4: Margen y Resultado Operativo -->
-          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <div>
-                <h3 class="text-sm font-bold text-slate-800">Evolución de Rentabilidad</h3>
-                <p class="text-xs text-slate-500">Comparativa mensual de ventas, margen bruto y gastos</p>
-              </div>
-            </div>
-            <div class="h-64">
-              <canvas id="chartRentabilidad"></canvas>
-            </div>
-          </div>
-        </div>
-
         <!-- Tabla Rápida: Últimas Ventas y Movimientos -->
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div class="p-4 border-b border-slate-200 flex items-center justify-between">
@@ -414,8 +358,7 @@ export const DashboardView = {
       window.lucide.createIcons();
     }
 
-    // Inicializar gráficos Chart.js
-    this.initCharts(sales, db.getCategories(), products);
+    // Los gráficos históricos fueron retirados del panel a pedido del usuario.
   },
 
   initCharts(sales, categories, products) {
