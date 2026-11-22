@@ -21,22 +21,22 @@ export const ArcaView = {
           <div>
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                <i data-lucide="shield" class="w-3.5 h-3.5 mr-1 inline"></i> Conexión ARCA Oficial
+                <i data-lucide="shield" class="w-3.5 h-3.5 mr-1 inline"></i> Integración ARCA pendiente
               </span>
               <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.environment === 'PRODUCCION' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
                 <i data-lucide="activity" class="w-3.5 h-3.5 mr-1 inline"></i> ${cfg.environment || 'HOMOLOGACIÓN'}
               </span>
             </div>
             <h1 class="text-2xl font-bold text-slate-800 tracking-tight mt-1">Facturación Electrónica ARCA (ex-AFIP)</h1>
-            <p class="text-xs text-slate-500">Gestión de comprobantes fiscales con CAE, emisión consolidada en lote al final del día y certificados digitales.</p>
+            <p class="text-xs text-slate-500">Preparación de la integración fiscal. La emisión real todavía no está habilitada.</p>
           </div>
 
           <div class="flex gap-2">
             <button onclick="window.arcaModule.openConfigModal()" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 transition inline-flex items-center gap-1.5">
               <i data-lucide="settings" class="w-4 h-4"></i> Configurar ARCA
             </button>
-            <button onclick="window.arcaModule.emitDailyBatchNow()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1.5">
-              <i data-lucide="send" class="w-4 h-4"></i> Emitir Lote del Día Ahora
+            <button disabled title="Pendiente de integración real con ARCA" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center gap-1.5">
+              <i data-lucide="send" class="w-4 h-4"></i> Emisión deshabilitada
             </button>
           </div>
         </div>
@@ -64,9 +64,9 @@ export const ArcaView = {
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <span class="text-xs font-medium text-slate-500 block">Certificado Digital</span>
             <div class="flex items-center gap-1.5 mt-1.5 text-xs font-bold text-emerald-600">
-              <i data-lucide="check-circle" class="w-4 h-4"></i> Vinculado & Válido
+              <i data-lucide="check-circle" class="w-4 h-4"></i> No verificado
             </div>
-            <span class="text-[10px] text-slate-400 block mt-0.5">Vto: 28/11/2027</span>
+            <span class="text-[10px] text-slate-400 block mt-0.5">Pendiente de validación con ARCA</span>
           </div>
         </div>
 
@@ -74,10 +74,10 @@ export const ArcaView = {
         <div class="bg-sky-50 border border-sky-200 rounded-xl p-4 text-xs text-sky-900 space-y-2">
           <div class="flex items-center gap-2 font-bold">
             <i data-lucide="info" class="w-4 h-4 text-sky-600"></i>
-            Regla de Emisión al Final del Día:
+            Estado de implementación:
           </div>
           <p class="text-[11px] text-sky-800 leading-relaxed">
-            Las ventas registradas en el mostrador o por pedidos se acumulan durante la jornada. <b>Al realizar el Cierre de Caja diario</b>, el sistema procesa automáticamente el lote completo ante los servidores de ARCA, asignando a cada operación su respectivo número fiscal, CAE y código QR oficial.
+            El módulo anterior generaba comprobantes simulados. La emisión se encuentra bloqueada hasta implementar autenticación WSAA, autorización WSFEv1 y verificación del CAE. No uses los comprobantes anteriores como facturas fiscales.
           </p>
         </div>
 
@@ -85,7 +85,7 @@ export const ArcaView = {
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <h3 class="text-sm font-bold text-slate-800">Comprobantes Fiscales Electrónicos Emitidos (${invoices.length})</h3>
-            <span class="text-xs text-slate-400">Todos cuentan con CAE verificado por ARCA</span>
+            <span class="text-xs text-slate-400">Registros anteriores sin verificación fiscal</span>
           </div>
 
           <div class="overflow-x-auto">
@@ -106,7 +106,7 @@ export const ArcaView = {
               </thead>
               <tbody class="divide-y divide-slate-100">
                 ${invoices.length === 0 ? `
-                  <tr><td colspan="10" class="text-center p-8 text-slate-400">No se han emitido facturas ARCA aún. Se generarán al cerrar la caja del día.</td></tr>
+                  <tr><td colspan="10" class="text-center p-8 text-slate-400">No se han emitido facturas ARCA aún. La emisión fiscal todavía no está habilitada.</td></tr>
                 ` : invoices.map(inv => `
                   <tr class="hover:bg-slate-50">
                     <td class="p-3 font-bold text-slate-800">
@@ -176,8 +176,8 @@ export const ArcaView = {
             <div class="col-span-2">
               <label class="block font-semibold text-slate-700 mb-1">Certificado Digital (.crt) & Clave Privada (.key)</label>
               <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <span class="text-slate-600">Certificado X.509 vigente (vence 28/11/2027)</span>
-                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Cargado</span>
+                <span class="text-slate-600">Certificado no verificado</span>
+                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Pendiente</span>
               </div>
             </div>
           </div>
@@ -298,16 +298,16 @@ export const ArcaView = {
             <!-- Pie Fiscal ARCA con CAE y Código QR -->
             <div class="pt-2 flex items-center justify-between gap-4 border-t-2 border-slate-800">
               <div class="flex items-center gap-3">
-                <!-- QR Oficial Simulado -->
+                <!-- Representación anterior no fiscal: QR no válido -->
                 <div class="w-20 h-20 bg-slate-900 text-white p-1 rounded flex flex-col items-center justify-center text-center font-mono text-[9px] shadow-sm">
                   <i data-lucide="qr-code" class="w-12 h-12 text-white"></i>
                   <span class="text-[8px]">QR ARCA</span>
                 </div>
                 <div class="space-y-0.5">
-                  <span class="font-bold text-slate-900 block text-xs">Comprobante Autorizado por ARCA</span>
+                  <span class="font-bold text-slate-900 block text-xs">Comprobante no verificado ante ARCA</span>
                   <p class="text-[11px] text-slate-600">CAE N°: <b class="font-mono text-slate-900">${inv.cae}</b></p>
                   <p class="text-[11px] text-slate-600">Fecha de Vencimiento de CAE: <b>${Formatters.date(inv.cae_vto)}</b></p>
-                  <span class="inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">APROBADO POR ARCA WEB SERVICES</span>
+                  <span class="inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">NO VERIFICADO · NO VÁLIDO COMO FACTURA</span>
                 </div>
               </div>
               <button onclick="window.print()" class="px-3 py-2 bg-slate-800 text-white rounded text-xs font-semibold hover:bg-slate-900 transition flex items-center gap-1.5">
