@@ -6,6 +6,7 @@ export const UsuariosView = {
   render(container) {
     const users = db.getUsers();
     const currentUser = db.getCurrentUser();
+    const central = window.app.centralReadOnly;
 
     container.innerHTML = `
       <div class="space-y-6 animate-fade-in max-w-5xl mx-auto">
@@ -17,11 +18,11 @@ export const UsuariosView = {
               </span>
             </div>
             <h1 class="text-2xl font-bold text-slate-800 tracking-tight mt-1">Gestión de Perfiles y Permisos</h1>
-            <p class="text-xs text-slate-500">Configurá quién tiene acceso a ventas, compras, costos sensibles, caja o tienda online.</p>
+            <p class="text-xs text-slate-500">${central ? 'Elegí cómo se muestra tu perfil en esta sesión del ERP.' : 'Configurá quién tiene acceso a ventas, compras, costos sensibles, caja o tienda online.'}</p>
           </div>
-          <button onclick="window.usuariosModule.openUserModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
+          ${central ? '' : `<button onclick="window.usuariosModule.openUserModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
             <i data-lucide="user-plus" class="w-4 h-4"></i> + Nuevo Perfil / Usuario
-          </button>
+          </button>`}
         </div>
 
         <!-- Tarjetas de Usuarios Registrados -->
@@ -72,19 +73,19 @@ export const UsuariosView = {
                 </div>
 
                 <div class="pt-3 border-t border-slate-100 flex items-center gap-2">
-                  ${!isCurrent ? `
-                    <button onclick="window.usuariosModule.switchActive('${u.id}')" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold">
-                      Activar Perfil
+                  ${!isCurrent && central && u.id !== window.app.centralDisplayProfileId ? '<span class="text-xs text-slate-500">Perfil de otra función</span>' : !isCurrent ? `
+                    <button type="button" ${central ? 'data-central-display-profile' : ''} onclick="window.usuariosModule.switchActive('${u.id}')" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold">
+                      ${central ? 'Usar mi perfil' : 'Activar Perfil'}
                     </button>
                   ` : `
                     <span class="flex-1 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold text-center border border-indigo-200">
                       ✓ Perfil en Uso
                     </span>
                   `}
-                  <button onclick="window.usuariosModule.openUserModal('${u.id}')" title="Editar Permisos" class="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">
+                  ${central ? '' : `<button onclick="window.usuariosModule.openUserModal('${u.id}')" title="Editar Permisos" class="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">
                     <i data-lucide="edit-3" class="w-4 h-4"></i>
-                  </button>
-                  ${u.id !== 'usr-admin' ? `
+                  </button>`}
+                  ${!central && u.id !== 'usr-admin' ? `
                     <button onclick="window.usuariosModule.deleteUser('${u.id}')" title="Eliminar Perfil" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200">
                       <i data-lucide="trash-2" class="w-4 h-4"></i>
                     </button>
@@ -314,7 +315,11 @@ window.usuariosModule = {
   switchActive(userId) {
     const u = db.getUser(userId);
     if (!u) return;
-    db.setCurrentUser(u);
+    if (window.app.centralReadOnly) {
+      if (!window.app.activateCentralDisplayProfile(userId)) return;
+    } else {
+      db.setCurrentUser(u);
+    }
     window.app.updateUserHeader();
     window.app.applyRolePermissions();
     window.app.showNotification(`Perfil activo cambiado a ${u.name} (${u.role}).`, 'success');

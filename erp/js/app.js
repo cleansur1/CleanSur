@@ -18,7 +18,7 @@ import { OrdenesCompraView } from './views/ordenes_compra.js?v=6.2';
 import { ReportesView } from './views/reportes.js?v=6.0';
 import { AuditoriaView } from './views/auditoria.js?v=6.0';
 import { ConfiguracionView } from './views/configuracion.js?v=6.0';
-import { UsuariosView } from './views/usuarios.js?v=6.0';
+import { UsuariosView } from './views/usuarios.js?v=6.1';
 import { OcrFacturasView } from './views/ocr_facturas.js?v=10.6';
 import { CajaView } from './views/caja.js?v=6.0';
 import { ArcaView } from './views/arca.js?v=6.0';
@@ -378,7 +378,7 @@ async function bootCentralReadOnly() {
     button.disabled = true;
     error.textContent = '';
     try {
-      await signInAdmin(form.elements.email.value, form.elements.password.value);
+      const { user } = await signInAdmin(form.elements.email.value, form.elements.password.value);
       const names = [...Object.keys(centralTables),'arca_config','arca_invoices','seasons','users','cost_history'];
       const values = await Promise.all(names.map(async name => {
         try {
@@ -407,7 +407,24 @@ async function bootCentralReadOnly() {
       db.saveTable = () => { throw new Error('Operación local bloqueada: usá la transacción central autorizada'); };
       db.centralSetTable = (name, rows) => { snapshot[name] = structuredClone(rows); };
       db.logAudit = () => {};
-      db.getCurrentUser = () => ({id:'central-staff',name:'Personal StayClean',role:'ADMINISTRADOR',permissions:new Proxy({}, {get:()=>true})});
+      const displayKey = 'cleansur-erp-display-profile:' + user.id;
+      const displayProfile = db.getUsers().find(profile =>
+        profile.id === 'usr-admin' && profile.name === 'Federico Eumann' && profile.active !== false);
+      let useDisplayProfile = false;
+      try { useDisplayProfile = localStorage.getItem(displayKey) === 'federico'; } catch {}
+      app.activateCentralDisplayProfile = profileId => {
+        if (!displayProfile || profileId !== displayProfile.id) return false;
+        useDisplayProfile = true;
+        try { localStorage.setItem(displayKey, 'federico'); } catch {}
+        return true;
+      };
+      app.centralDisplayProfileId = displayProfile?.id;
+      db.getCurrentUser = () => ({
+        id: useDisplayProfile && displayProfile ? displayProfile.id : 'central-staff',
+        name: useDisplayProfile && displayProfile ? displayProfile.name : 'Personal StayClean',
+        role: 'ADMINISTRADOR',
+        permissions: new Proxy({}, {get:()=>true})
+      });
       db.hasPermission = () => true;
       db.runDataNormalizations = () => {};
       app.centralReadOnly = true;
@@ -439,6 +456,7 @@ async function bootCentralReadOnly() {
             control.matches('#centralPurchaseDetailModal .close-purchase-detail, #centralPurchaseDetailModal [data-edit-aromas]') ||
             control.closest('#centralPurchaseDetailModal [data-aroma-editor] form')
           );
+          const profileControl = app.currentRoute === 'usuarios' && control.matches('[data-central-display-profile]');
           const storeControl = app.currentRoute === 'tienda' && control.matches('[data-copy-store-link], [data-store-category]');
           const priceControl = app.currentRoute === 'productos' && control.closest('#productForm[data-product-edit="true"]');
           const purchaseOrderControl = app.currentRoute === 'ordenes_compra' &&
@@ -446,7 +464,7 @@ async function bootCentralReadOnly() {
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
             (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale, [data-history-action]') ||
               handler.startsWith('window.pedidosModule.convertOrder(') || handler.startsWith('window.ventasModule.removeFromCart('));
-          if (salesControl || purchaseOrderControl || safeNavigation || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          if (salesControl || purchaseOrderControl || safeNavigation || profileControl || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }
