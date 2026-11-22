@@ -2,7 +2,7 @@
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
 import { db } from './db.js';
 import { Formatter } from './models.js';
-import { staycleanPublicCatalog, staycleanPublicCatalogAromas, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthUpdatePassword, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js?v=account-1';
+import { staycleanPublicCatalog, staycleanPublicCatalogAromas, staycleanAuthSignUp, staycleanAuthSignIn, staycleanAuthSignOut, staycleanAuthReset, staycleanAuthUpdatePassword, staycleanAuthToken, staycleanCustomerProfile, staycleanCustomerRpc, staycleanCustomerOrders, staycleanAuthenticatedOrder, STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js?v=account-1';
 
 const escapeCatalogText = value => String(value ?? '').replace(/[&<>"']/g, ch =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
@@ -963,14 +963,20 @@ class TiendaStandaloneApp {
   }
 
   async openOrderConfirmation() {
+    this.expectedCostTotal = undefined;
+    let costPrices;
     if (this.customerProfile) {
       const profile = this.customerProfile;
       profile.creditAccountEnabled = false;
       try {
         const current = await staycleanCustomerProfile();
         profile.creditAccountEnabled = current?.credit_account_enabled === true;
-      } catch {
-        // Keep credit unavailable when eligibility cannot be refreshed.
+        if (current?.cost_price_list_enabled === true) {
+          costPrices = await staycleanCustomerRpc('stayclean_customer_cost_prices', {p_product_ids: this.cart.map(item => item.id)});
+        }
+      } catch (error) {
+        this.showNotice('No se pudo verificar el precio del pedido: ' + error.message);
+        return;
       }
       if (this.customerProfile !== profile) return;
     }
@@ -980,7 +986,10 @@ class TiendaStandaloneApp {
 
     const prof = this.customerProfile;
     const totalCount = this.cart.reduce((sum, item) => sum + item.quantity, 0);
-    const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const unitPrice = item => costPrices ? Number(costPrices[item.id]) : item.price;
+    if (costPrices && this.cart.some(item => !Number.isFinite(unitPrice(item)))) return;
+    const totalAmount = Math.round(this.cart.reduce((sum, item) => sum + unitPrice(item) * item.quantity, 0) * 100) / 100;
+    if (costPrices) this.expectedCostTotal = totalAmount;
 
     content.innerHTML = `
       <div class="p-5 border-b border-slate-200 bg-[#0E3A6B] text-white flex items-center justify-between">
@@ -1043,7 +1052,7 @@ class TiendaStandaloneApp {
         <!-- Resumen de Productos -->
         <div class="space-y-2">
           <h4 class="font-bold text-slate-700 flex justify-between">
-            <span>Productos a entregar (${totalCount}):</span>
+            <span>Productos a entregar (${totalCount})${costPrices ? ' · Lista al costo' : ''}:</span>
             <span class="font-extrabold text-[#1f4e5b]">${Formatter.money(totalAmount)}</span>
           </h4>
           <div class="max-h-36 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg p-2 bg-white">
@@ -1053,7 +1062,7 @@ class TiendaStandaloneApp {
                   <strong>${item.quantity}x</strong> ${escapeCatalogText(item.name)}
                 </div>
                 <div class="font-mono text-slate-800 shrink-0">
-                  ${Formatter.money(item.price * item.quantity)}
+                  ${Formatter.money(unitPrice(item) * item.quantity)}
                 </div>
               </div>
             `).join('')}
@@ -1108,6 +1117,7 @@ class TiendaStandaloneApp {
         delivery_address: prof.address || '',
         delivery_city: city,
         payment_method: paymentMethod,
+        expected_cost_total: this.expectedCostTotal,
         items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
       });
       this.cart = [];
