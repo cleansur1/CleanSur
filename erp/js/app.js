@@ -2,7 +2,7 @@
 import { db } from './db.js';
 import { signInAdmin, signOutAdmin, restoreAdminSession, refreshAdminSession } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, countNewStoreOrders, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
-import { DashboardView } from './views/dashboard.js?v=mobile-swipe-1';
+import { DashboardView } from './views/dashboard.js?v=dashboard-clean-1';
 import { VentasView } from './views/ventas.js?v=archive-controls-2';
 import { ComprasView } from './views/compras.js?v=aromas-session-2';
 import { ProductosView } from './views/productos.js?v=7.1';
