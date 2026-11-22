@@ -54,12 +54,12 @@ class TiendaStandaloneApp {
 
   async restoreCustomerSession(){
     if(!await staycleanAuthToken()){this.customerProfile=null;this.updateProfileUI();return;}
-    try{const p=await staycleanCustomerProfile();if(p?.registered){this.customerProfile={name:p.name,phone:p.phone,address:p.address,zone:p.city,email:p.email};this.updateProfileUI();}}
+    try{const p=await staycleanCustomerProfile();if(p?.registered){this.customerProfile={name:p.name,phone:p.phone,address:p.address,zone:p.city,email:p.email,creditAccountEnabled:p.credit_account_enabled===true};this.updateProfileUI();}}
     catch(e){console.error('No se pudo restaurar el perfil',e);}
   }
   async saveCustomerProfileData(profile){
     const p=await staycleanCustomerProfile({name:profile.name,phone:profile.phone,address:profile.address,city:/copahue/i.test(profile.zone||'')?'Copahue':'Caviahue'});
-    this.customerProfile={...profile,email:p.email};this.updateProfileUI();
+    this.customerProfile={...profile,email:p.email,creditAccountEnabled:p.credit_account_enabled===true};this.updateProfileUI();
   }
 
   showStoreDialog(title) {
@@ -955,7 +955,18 @@ class TiendaStandaloneApp {
     this.openOrderConfirmation();
   }
 
-  openOrderConfirmation() {
+  async openOrderConfirmation() {
+    if (this.customerProfile) {
+      const profile = this.customerProfile;
+      profile.creditAccountEnabled = false;
+      try {
+        const current = await staycleanCustomerProfile();
+        profile.creditAccountEnabled = current?.credit_account_enabled === true;
+      } catch {
+        // Keep credit unavailable when eligibility cannot be refreshed.
+      }
+      if (this.customerProfile !== profile) return;
+    }
     const modal = document.getElementById('orderConfirmationModal');
     const content = document.getElementById('orderConfirmationContent');
     if (!modal || !content) return;
@@ -1049,7 +1060,7 @@ class TiendaStandaloneApp {
             <option value="Mercado Pago" disabled>Mercado Pago — No disponible</option>
             <option value="Efectivo contra entrega" selected>Efectivo contra entrega en Caviahue</option>
             <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
-            <option value="Cuenta Corriente">Cuenta Corriente Comercial (Hoteles / Cabañas habituales)</option>
+            <option value="Cuenta Corriente" ${prof.creditAccountEnabled ? '' : 'disabled'}>${prof.creditAccountEnabled ? 'Cuenta Corriente Comercial' : 'Cuenta Corriente — No disponible'}</option>
           </select>
         </div>
 
