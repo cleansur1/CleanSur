@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>CleanSur ERP - Distribuidora Limpieza y Descartables</title>
   
   <!-- PWA & Mobile Web App Meta -->
@@ -59,6 +59,21 @@
     }
     .animate-fade-in {
       animation: fadeIn 0.25s ease-out forwards;
+    }
+  
+    @media (max-width: 767px) {
+      #mainContent { min-width: 0; padding: .75rem; overflow-x: clip; padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+      #mainContent .overflow-x-auto { max-width: 100%; overscroll-behavior-inline: contain; }
+      #mainContent :is(input:not([type=checkbox]):not([type=radio]), select, textarea), #globalSearchModal input { font-size: 16px; max-width: 100%; }
+      #mainContent [id$="Modal"] { padding: .75rem; }
+      #sidebar { width: min(18rem, 90vw); }
+      #sidebar nav a { min-height: 44px; }
+      #btnMobileMenu { min-width: 44px; min-height: 44px; }
+      .cs-erp header.sticky { gap: .5rem; padding-inline: .5rem; }
+      .cs-erp header.sticky > div:first-child { min-width: 0; gap: .375rem; }
+      .cs-erp header.sticky > div:first-child > div { min-width: 0; }
+      .cs-erp header.sticky > div:last-child { margin-left: 0; gap: .375rem; flex-shrink: 0; }
+      .cs-erp header.sticky > div:last-child button { min-height: 44px; min-width: 44px; justify-content: center; }
     }
   </style>
   <link rel="stylesheet" href="assets/cleansur-brand.css?v=3">
@@ -307,7 +322,7 @@
       
       <!-- Lado Izquierdo: Botón Menú Móvil & Buscador Global -->
       <div class="flex items-center gap-3 flex-1 max-w-xl">
-        <button id="btnMobileMenu" class="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg">
+        <button id="btnMobileMenu" aria-label="Abrir menú" class="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg">
           <i data-lucide="menu" class="w-6 h-6"></i>
         </button>
 
@@ -331,7 +346,7 @@
             <span class="hidden sm:inline">Acción Rápida</span>
           </button>
           
-          <div class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 hidden group-hover:block text-xs z-50 animate-fade-in">
+          <div class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 hidden group-hover:block group-focus-within:block text-xs z-50 animate-fade-in">
             <a href="#" onclick="window.app.navigate('ventas', { action: 'new' })" class="flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 text-slate-700 font-medium">
               <i data-lucide="shopping-cart" class="w-4 h-4 text-[#0E3A6B]"></i> + Nueva Venta
             </a>
@@ -431,6 +446,6 @@
     });
   </script>
   <!-- Script Principal de la Aplicación -->
-  <script type="module" src="js/app.js?v=internal-withdrawals-1"></script>
+  <script type="module" src="js/app.js?v=mobile-1"></script>
 </body>
 </html>
