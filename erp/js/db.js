@@ -395,75 +395,11 @@ export class Database {
   }
 
   emitSingleArcaInvoice(saleId) {
-    const sale = this.getSale(saleId);
-    if (!sale) throw new Error('Venta no encontrada');
-
-    const arcaInvoices = this.getArcaInvoices();
-    const existing = arcaInvoices.find(inv => inv.sale_number === sale.sale_number && inv.status === 'EMITIDA');
-    if (existing) return existing;
-
-    const cfg = this.getArcaConfig();
-    const nextNro = arcaInvoices.length + 142;
-    const caeNum = '74' + Math.floor(100000000000 + Math.random() * 900000000000);
-    const vtoDate = new Date(Date.now() + 86400000 * 10).toISOString().substring(0, 10);
-
-    const isEmpresa = sale.customer_name.toLowerCase().includes('hotel') ||
-                      sale.customer_name.toLowerCase().includes('restaurante') ||
-                      sale.customer_name.toLowerCase().includes('complejo');
-
-    const tipoCbte = isEmpresa ? 'FA_A' : 'FA_B';
-
-    const newInvoice = {
-      id: `arca-${Date.now()}`,
-      sale_id: sale.id,
-      sale_number: sale.sale_number,
-      tipo_cbte: tipoCbte,
-      pto_vta: cfg.punto_venta || 5,
-      nro_cbte: nextNro,
-      fecha: sale.date || new Date().toISOString().substring(0, 10),
-      cuit_cliente: sale.customer_id ? (this.getCustomer(sale.customer_id)?.cuit_dni || '20-00000000-1') : '20-00000000-1',
-      cliente_nombre: sale.customer_name,
-      importe_neto: sale.subtotal,
-      importe_iva: sale.vat_amount,
-      importe_total: sale.total,
-      cae: caeNum,
-      cae_vto: vtoDate,
-      qr_data: `https://www.afip.gob.ar/fe/qr/?p=${btoa(JSON.stringify({
-        ver: 1,
-        fecha: sale.date,
-        cuit: 30718942154,
-        ptoVta: cfg.punto_venta || 5,
-        tipoCbte: tipoCbte === 'FA_A' ? 1 : 6,
-        nroCbte: nextNro,
-        total: sale.total,
-        cae: caeNum
-      }))}`,
-      status: 'EMITIDA',
-      created_at: new Date().toISOString()
-    };
-
-    arcaInvoices.unshift(newInvoice);
-    this.saveTable('arca_invoices', arcaInvoices);
-
-    this.logAudit('EMITIR_ARCA', 'ARCA', `Factura ${tipoCbte} 0005-${String(nextNro).padStart(8, '0')} emitida con CAE ${caeNum} para ${sale.customer_name}.`);
-    return newInvoice;
+    throw new Error('Emisión fiscal deshabilitada: falta integración real con ARCA y autorización de CAE.');
   }
 
   emitArcaDailyBatch(dateStr) {
-    const targetDate = dateStr || new Date().toISOString().substring(0, 10);
-    const sales = this.getSales().filter(s => s.status === 'COMPLETADA' && s.date === targetDate);
-    const arcaInvoices = this.getArcaInvoices();
-
-    let emittedCount = 0;
-    sales.forEach(sale => {
-      const already = arcaInvoices.find(inv => inv.sale_number === sale.sale_number && inv.status === 'EMITIDA');
-      if (!already) {
-        this.emitSingleArcaInvoice(sale.id);
-        emittedCount++;
-      }
-    });
-
-    return { date: targetDate, emittedCount, totalSales: sales.length };
+    throw new Error('Emisión fiscal deshabilitada: el lote simulado no es una factura válida.');
   }
 
   // Helper de imágenes para Tienda Nube
