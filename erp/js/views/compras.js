@@ -68,6 +68,19 @@ export const ComprasView = {
     const slot = document.getElementById('compras-ocr-embedded-slot');
     if (slot) {
       OcrFacturasView.render(slot, { ...params, embedded: true });
+      if (params.editingPurchase && window.app?.centralReadOnly) {
+        const purchase = params.editingPurchase;
+        const canEditAromas = ['RECIBIDA','CONFIRMADA'].includes(purchase.status) &&
+          (purchase.items || []).some(item => ['2000107','2000086'].includes(String(db.getProducts().find(p => p.id === item.product_id)?.sku)));
+        if (canEditAromas) {
+          const aromaButton = document.createElement('button');
+          aromaButton.type = 'button';
+          aromaButton.textContent = 'Editar aromas de esta factura';
+          aromaButton.className = 'mb-4 rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800 hover:bg-blue-100';
+          aromaButton.onclick = () => this.viewCentralPurchase(purchase.id);
+          slot.prepend(aromaButton);
+        }
+      }
     }
     if (window.lucide) window.lucide.createIcons();
 
