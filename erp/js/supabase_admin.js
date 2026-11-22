@@ -1,8 +1,28 @@
 // Panel administrativo StayClean: acceso con Supabase Auth y RLS, solo lectura.
-// No almacenar tokens en localStorage; las sesiones viven en memoria.
+// Persistir solo el refresh token para recuperar la sesión al reabrir la PWA.
 import { STAYCLEAN_SUPABASE_URL, STAYCLEAN_PUBLISHABLE_KEY } from './supabase_public.js';
 
 let session = null;
+const SESSION_KEY = 'cleansur:erp:refresh-token:v1';
+function saveRefreshToken(token) { try { if (token) localStorage.setItem(SESSION_KEY, token); } catch {} }
+function clearRefreshToken() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+export async function restoreAdminSession() {
+  let token; try { token = localStorage.getItem(SESSION_KEY); } catch {}
+  if (!token) return null;
+  try {
+    const response = await fetch(`${STAYCLEAN_SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:token})});
+    const candidate = await parse(response);
+    const staffResponse = await fetch(`${STAYCLEAN_SUPABASE_URL}/rest/v1/rpc/stayclean_is_staff`,{method:'POST',headers:headers(candidate.access_token),body:'{}'});
+    if (await parse(staffResponse) !== true) throw new Error('Acceso revocado');
+    session = candidate; saveRefreshToken(candidate.refresh_token); return {user:candidate.user};
+  } catch { session=null; clearRefreshToken(); return null; }
+}
+export async function refreshAdminSession() {
+  if (!session) return restoreAdminSession();
+  if (session.expires_at && session.expires_at * 1000 > Date.now()+60000) return {user:session.user};
+  return restoreAdminSession();
+}
+
 const headers = (token) => ({
   apikey: STAYCLEAN_PUBLISHABLE_KEY,
   Authorization: `Bearer ${token}`,
@@ -27,11 +47,13 @@ export async function signInAdmin(email, password) {
   const isStaff = await parse(staffResponse);
   if (isStaff !== true) throw new Error('Tu usuario no tiene acceso autorizado a StayClean');
   session = candidate;
+  saveRefreshToken(candidate.refresh_token);
   return { user: candidate.user };
 }
 export async function signOutAdmin() {
   const token = session?.access_token;
   session = null;
+  clearRefreshToken();
   if (token) {
     await fetch(`${STAYCLEAN_SUPABASE_URL}/auth/v1/logout`, {
       method: 'POST', headers: headers(token)
