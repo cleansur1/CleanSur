@@ -1,3 +1,4 @@
+import { bindArchive, isCancelled } from './archive.js?v=1';
 import { statusColor } from './status_badge.js';
 // Módulo de Ventas / POS para Limpieza Caviahue
 // Cálculo en vivo, descuentos, listas de precios, unidades/conversiones, descuento automático de stock y anulación.
@@ -37,11 +38,11 @@ export const VentasView = {
           const editable = (row.channel === 'Tienda online' || String(row.number).startsWith('VT-PED-'))
             && !row.fiscal_reference && !['CANCELADO', 'ANULADA'].includes(row.status)
             && (!row.payment_status || row.payment_status === 'PENDIENTE');
-          return `<article class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 py-3">
+          return `<article data-archive-row ${isCancelled(row.status) ? `data-archive-id="${esc(row.number)}"` : ''} class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 py-3">
             <div><strong>${esc(row.number)} · ${esc(row.customer)}</strong>
               <p class="text-xs text-slate-600">${esc(row.channel)} · ${Formatter.money(Number(row.total))} · <span class="rounded px-2 py-0.5 font-semibold ${statusColor(row.status)}">${esc(row.status)}</span></p>
             </div>
-            <div class="flex gap-2">
+            <div class="flex gap-2" data-archive-actions>
               ${(editable ? [['view','Ver','eye'],['edit','Editar','pencil'],['void','Eliminar (anular)','trash-2']] : [['view','Ver','eye']]).map(([action,label,icon]) =>
                 `<button type="button" data-history-action="${action}" data-history-row="${index}" aria-label="${label}" title="${label}" class="rounded-lg border p-2 text-[#0E3A6B] hover:bg-sky-50"><i data-lucide="${icon}" class="h-4 w-4"></i></button>`).join('')}
             </div>
@@ -49,6 +50,7 @@ export const VentasView = {
         }).join('');
         container.innerHTML = '<section class="rounded-xl border border-slate-200 bg-white p-5"><h2 class="mb-2 font-bold">Historial de ventas y pedidos</h2>' +
           (cards || '<p>Todavía no hay ventas o pedidos registrados.</p>') + '</section>';
+        bindArchive(container, 'sales');
         window.lucide?.createIcons();
         for (const button of container.querySelectorAll('[data-history-action]')) {
           button.onclick = async () => {
