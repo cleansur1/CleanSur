@@ -1327,11 +1327,19 @@ export const ComprasView = {
   },
 
   async callPurchaseRpc(name, args) {
-    const {getAdminSession}=await import('../supabase_admin.js');
+    const {getAdminSession,refreshAdminSession}=await import('../supabase_admin.js');
     const {STAYCLEAN_SUPABASE_URL:base,STAYCLEAN_PUBLISHABLE_KEY:key}=await import('../supabase_public.js');
-    const token=getAdminSession()?.access_token;
-    if(!token)throw Error('Iniciá sesión nuevamente en CleanSur');
-    const response=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(args)});
+    await refreshAdminSession();
+    let token=getAdminSession()?.access_token;
+    if(!token)throw Error('La sesión venció. Iniciá sesión nuevamente en CleanSur.');
+    const send=authToken=>fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+authToken,'Content-Type':'application/json'},body:JSON.stringify(args)});
+    let response=await send(token);
+    if(response.status===401){
+      await refreshAdminSession();
+      const refreshed=getAdminSession()?.access_token;
+      if(!refreshed||refreshed===token)throw Error('La sesión venció. Volvé a iniciar sesión en CleanSur.');
+      response=await send(refreshed);
+    }
     const result=await response.json().catch(()=>({}));
     if(!response.ok)throw Error(result.message||'No se pudo guardar en Supabase');
     return result;
