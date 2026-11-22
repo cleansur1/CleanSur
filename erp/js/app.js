@@ -1,6 +1,6 @@
 // Controlador Principal & Router para Limpieza Caviahue ERP v6.0
 import { db } from './db.js';
-import { signInAdmin, signOutAdmin } from './supabase_admin.js';
+import { signInAdmin, signOutAdmin, restoreAdminSession, refreshAdminSession } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, countNewStoreOrders, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
 import { DashboardView } from './views/dashboard.js?v=8.1';
 import { VentasView } from './views/ventas.js?v=archive-controls-2';
@@ -411,21 +411,21 @@ async function startOrderAlerts() {
 }
 
 function bootCentralReadOnly() {
+  window.setInterval(() => { refreshAdminSession().catch(() => {}); }, 4 * 60 * 1000);
   const shield = document.createElement('div');
   shield.id = 'central-access';
   shield.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f1f5f9;display:grid;place-items:center;font-family:system-ui';
   shield.innerHTML = '<form id="central-form" style="background:white;border-radius:16px;padding:32px;max-width:410px;width:90%;box-shadow:0 10px 35px #0002"><h2 style="font-size:23px;font-weight:800;color:#0e3a6b">CleanSur · Acceso al ERP</h2><p style="margin:12px 0;color:#475569">Ingresá con tu cuenta de CleanSur para acceder a ventas, compras e inventario.</p><input name="email" type="email" autocomplete="username" required placeholder="Correo" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><input name="password" type="password" autocomplete="current-password" required placeholder="Contraseña" style="width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:8px"><button style="background:#0e3a6b;color:white;padding:12px;border-radius:8px;width:100%;margin-top:12px">Ingresar</button><p id="central-error" role="alert" style="color:#b91c1c;margin-top:12px"></p></form>';
   document.body.append(shield);
   document.getElementById('stayclean-boot-status')?.remove();
-  document.getElementById('central-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    const form = event.currentTarget;
+  const openCentralSession = async (restoredUser = null) => {
+    const form = document.getElementById('central-form');
     const button = form.querySelector('button');
     const error = document.getElementById('central-error');
     button.disabled = true;
     error.textContent = '';
     try {
-      const { user } = await signInAdmin(form.elements.email.value, form.elements.password.value);
+      const { user } = restoredUser ? {user:restoredUser} : await signInAdmin(form.elements.email.value, form.elements.password.value);
       const names = [...Object.keys(centralTables),'arca_config','arca_invoices','seasons','users','cost_history'];
       const values = await Promise.all(names.map(async name => {
         try {
@@ -524,7 +524,9 @@ function bootCentralReadOnly() {
       error.textContent = err.message || 'No se pudo iniciar la sesión';
       await signOutAdmin().catch(()=>{});
     } finally { button.disabled = false; }
-  });
+  };
+  document.getElementById('central-form').addEventListener('submit', async event => { event.preventDefault(); await openCentralSession(); });
+  restoreAdminSession().then(restored => { if (restored?.user) openCentralSession(restored.user); });
 }
 function boot() {
   const mode = new URLSearchParams(location.search).get('central');
