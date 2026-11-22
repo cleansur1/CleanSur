@@ -166,6 +166,7 @@ export const ClientesView = {
 
   renderCustomerForm(container, priceLists, customer = null) {
     const isEdit = !!customer;
+    const centralEdit = Boolean(window.app.centralReadOnly && customer);
     container.innerHTML = `
       <div class="space-y-6 animate-fade-in max-w-3xl mx-auto">
         <div class="flex items-center justify-between bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
@@ -182,7 +183,7 @@ export const ClientesView = {
           </div>
         </div>
 
-        <form onsubmit="window.clientesModule.saveCustomer(event, '${customer ? customer.id : ''}')" class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4 text-xs">
+        <form ${centralEdit ? 'data-central-customer-list-form' : `onsubmit="window.clientesModule.saveCustomer(event, '${customer ? customer.id : ''}')"`} class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4 text-xs">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Nombre o Razón Social *</label>
@@ -215,7 +216,7 @@ export const ClientesView = {
                 `).join('')}
                 ${window.app.centralReadOnly && customer ? `<option value="internal-cost" ${customer.cost_price_list_enabled ? 'selected' : ''}>Al costo</option>` : ''}
               </select>
-              ${window.app.centralReadOnly && customer ? '<button type="button" data-save-cost-list class="mt-2 text-sm font-semibold text-blue-800 underline">Guardar lista de precios</button><p data-cost-list-status role="status" class="text-sm mt-1"></p>' : ''}
+              ${window.app.centralReadOnly && customer ? '<p data-cost-list-status role="status" class="text-sm mt-1"></p>' : ''}
             </div>
 
             <div>
@@ -271,7 +272,7 @@ export const ClientesView = {
 
           <div class="flex justify-end gap-3 pt-3 border-t">
             <button type="button" onclick="window.app.navigate('clientes')" class="px-5 py-2 border rounded-lg">Cancelar</button>
-            <button type="submit" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold">Guardar Cliente</button>
+            <button type="submit" ${centralEdit ? 'data-save-cost-list' : ''} class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold">${centralEdit ? 'Guardar lista de precios' : 'Guardar Cliente'}</button>
           </div>
         </form>
       </div>
@@ -279,7 +280,17 @@ export const ClientesView = {
 
     const priceList = container.querySelector('#centralPriceList');
     const saveList = container.querySelector('[data-save-cost-list]');
-    saveList?.addEventListener('click', async () => {
+    const centralForm = container.querySelector('[data-central-customer-list-form]');
+    centralForm?.querySelectorAll('input, select, textarea').forEach(field => {
+      if (field !== priceList) field.disabled = true;
+    });
+    if (centralForm && priceList) {
+      for (const option of priceList.options) {
+        option.disabled = !['internal-cost', customer.price_list_id || ''].includes(option.value) && option.value !== '';
+      }
+    }
+    centralForm?.addEventListener('submit', async event => {
+      event.preventDefault();
       const status = container.querySelector('[data-cost-list-status]');
       const enabled = priceList.value === 'internal-cost';
       if (!enabled && priceList.value && priceList.value !== customer.price_list_id) {
@@ -298,7 +309,8 @@ export const ClientesView = {
         if (!response.ok || result !== enabled) throw Error(result?.message || 'No se pudo guardar la lista');
         db.centralSetTable('customers', db.getCustomers().map(row =>
           row.id === customer.id ? {...row, cost_price_list_enabled: enabled} : row));
-        status.textContent = enabled ? 'Lista al costo asignada' : 'Lista al costo desactivada';
+        window.app.showNotification(enabled ? 'Lista al costo asignada.' : 'Lista habitual restaurada.', 'success');
+        window.app.navigate('clientes');
       } catch (error) {
         status.textContent = error.message;
       } finally {
