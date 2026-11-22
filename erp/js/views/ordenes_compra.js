@@ -1,4 +1,4 @@
-import { bindArchive, isCancelled } from './archive.js?v=1';
+import { bindArchive, isCancelled } from './archive.js?v=2';
 // Módulo de Órdenes de Compra para Limpieza Caviahue
 // Estados: Borrador, Enviada, Confirmada, Recibida. Al recibir mercadería, transforma en Compra con Costo Caviahue.
 

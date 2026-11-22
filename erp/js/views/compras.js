@@ -1,4 +1,4 @@
-import { bindArchive, isCancelled } from './archive.js?v=1';
+import { bindArchive, isCancelled } from './archive.js?v=2';
 import { statusColor } from './status_badge.js';
 import { db } from '../db.js';
 import { Formatter, PackagingEngine, LogisticsCostDistributor } from '../models.js';

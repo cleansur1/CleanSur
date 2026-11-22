@@ -1,4 +1,4 @@
-import { bindArchive, isCancelled } from './archive.js?v=1';
+import { bindArchive, isCancelled } from './archive.js?v=2';
 import { statusColor } from './status_badge.js';
 // Módulo de Ventas / POS para Limpieza Caviahue
 // Cálculo en vivo, descuentos, listas de precios, unidades/conversiones, descuento automático de stock y anulación.

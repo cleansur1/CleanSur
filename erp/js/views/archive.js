@@ -14,6 +14,7 @@ export function bindArchive(container, namespace) {
   }
   const toggle = document.createElement('button');
   toggle.type = 'button';
+  toggle.dataset.archiveToggle = '';
   toggle.className = 'mb-3 rounded-lg border bg-white px-3 py-2 text-sm font-semibold text-slate-700';
   container.prepend(toggle);
   let showArchive = false;

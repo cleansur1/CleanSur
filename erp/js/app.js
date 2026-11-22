@@ -3,8 +3,8 @@ import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, countNewStoreOrders, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
 import { DashboardView } from './views/dashboard.js?v=8.1';
-import { VentasView } from './views/ventas.js?v=order-alert-1';
-import { ComprasView } from './views/compras.js?v=archive-1';
+import { VentasView } from './views/ventas.js?v=archive-controls-2';
+import { ComprasView } from './views/compras.js?v=archive-controls-2';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
@@ -14,7 +14,7 @@ import { ComparadorView } from './views/comparador.js?v=6.0';
 import { ReposicionView } from './views/reposicion.js?v=6.0';
 import { EstacionalidadView } from './views/estacionalidad.js?v=6.0';
 import { GastosView } from './views/gastos.js?v=6.0';
-import { OrdenesCompraView } from './views/ordenes_compra.js?v=archive-1';
+import { OrdenesCompraView } from './views/ordenes_compra.js?v=archive-controls-2';
 import { ReportesView } from './views/reportes.js?v=6.0';
 import { AuditoriaView } from './views/auditoria.js?v=6.0';
 import { ConfiguracionView } from './views/configuracion.js?v=6.0';
@@ -509,10 +509,12 @@ function bootCentralReadOnly() {
           const priceControl = app.currentRoute === 'productos' && control.closest('#productForm[data-product-edit="true"]');
           const purchaseOrderControl = app.currentRoute === 'ordenes_compra' &&
             (control.matches('[data-purchase-order-control]') || control.closest('#purchaseOrderDialog'));
+          const archiveControl = ['compras', 'ordenes_compra', 'ventas', 'pedidos'].includes(app.currentRoute) &&
+            control.matches('#mainContent [data-archive-toggle], #mainContent [data-archive-id] [data-archive-action]');
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
             (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale, [data-history-action]') ||
               handler.startsWith('window.pedidosModule.convertOrder(') || handler.startsWith('window.ventasModule.removeFromCart('));
-          if ((app.currentRoute === "caja" && control.matches("[data-cash-action]")) || salesControl || purchaseOrderControl || safeNavigation || (app.currentRoute === 'clientes' && control.matches('[data-customer-credit], [data-customer-withdrawal], [data-save-cost-list]')) || profileControl || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          if ((app.currentRoute === "caja" && control.matches("[data-cash-action]")) || archiveControl || salesControl || purchaseOrderControl || safeNavigation || (app.currentRoute === 'clientes' && control.matches('[data-customer-credit], [data-customer-withdrawal], [data-save-cost-list]')) || profileControl || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }
