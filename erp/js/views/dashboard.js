@@ -46,6 +46,27 @@ export const DashboardView = {
     }
 
     container.innerHTML = `
+      <style>
+        @media (max-width: 767px) {
+          .cleansur-dashboard-strip {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(235px, 82vw);
+            grid-template-columns: none;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scroll-snap-type: x proximity;
+            overscroll-behavior-x: contain;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 10px;
+            scrollbar-width: thin;
+          }
+          .cleansur-dashboard-strip > * {
+            min-width: 0;
+            scroll-snap-align: start;
+          }
+        }
+      </style>
       <div class="space-y-6 animate-fade-in">
         <!-- Encabezado con Selector de Período y Botones Rápidos -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#8FD0F4]/40 shadow-xs">
@@ -74,7 +95,7 @@ export const DashboardView = {
         </div>
 
         <!-- Tarjetas KPI Principales (Fila 1) -->
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 cleansur-dashboard-strip">
           <!-- Ventas Mes -->
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
             <div class="flex items-center justify-between text-slate-500 mb-1">
@@ -157,7 +178,7 @@ export const DashboardView = {
         </div>
 
         <!-- Tarjetas KPI Secundarias (Fila 2) -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5 cleansur-dashboard-strip">
           <!-- Compras registradas -->
           <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
@@ -215,7 +236,7 @@ export const DashboardView = {
             </span>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 cleansur-dashboard-strip">
             <!-- Stock Bajo -->
             <div class="p-3.5 rounded-lg border border-amber-200 bg-amber-50/50">
               <div class="flex items-center justify-between">
