@@ -961,6 +961,7 @@ class TiendaStandaloneApp {
     try {
       if (await staycleanCustomerRpc('stayclean_is_staff') !== true) throw Error('Solo administradores pueden cargar ventas asistidas');
       this.closeCart();
+      this.closeOrderConfirmation();
       let modal = document.getElementById('assistedCheckoutModal');
       if (!modal) {
         modal = document.createElement('div');
@@ -1198,8 +1199,8 @@ class TiendaStandaloneApp {
           <div class="grid grid-cols-2 gap-2 text-[11px]">
             <div>
               <span class="text-slate-400 block">Cliente:</span>
-              <strong class="text-slate-800">${prof.name}</strong>
-              <span class="text-slate-500 block">(${prof.customer_type})</span>
+              <strong class="text-slate-800">${escapeCatalogText(prof.name)}</strong>
+              <button type="button" onclick="window.tiendaApp.openAssistedCheckout()" class="block mt-1 text-blue-700 font-bold underline text-[11px]">Cambiar cliente · Venta asistida</button>
             </div>
             <div>
               <span class="text-slate-400 block">Contacto WhatsApp:</span>
