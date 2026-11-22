@@ -32,6 +32,7 @@ class TiendaStandaloneApp {
     this.updateCartBadge();
     this.applyFilters();
     this.checkPaymentReturn();
+    this.checkAssistedAccess();
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -260,6 +261,7 @@ class TiendaStandaloneApp {
         case 'login':
           await staycleanAuthSignIn(email, password);
           await this.restoreCustomerSession();
+          await this.checkAssistedAccess();
           this.accountDialog.close();
           if (!this.customerProfile) await this.openProfileModal();
           break;
@@ -941,6 +943,139 @@ class TiendaStandaloneApp {
       location.assign(data.checkout_url);
     }catch(e){this.showNotice('No se inició el pago ni se confirmó el pedido: '+e.message);}
     finally{this.sendingOrder=false;}
+  }
+
+
+  async checkAssistedAccess() {
+    const button = document.getElementById('btnAssistedCheckout');
+    if (!button) return;
+    button.classList.add('hidden');
+    try {
+      if (await staycleanAuthToken() && await staycleanCustomerRpc('stayclean_is_staff')) button.classList.remove('hidden');
+    } catch (error) { console.warn('Venta asistida no habilitada:', error.message); }
+  }
+
+  async openAssistedCheckout() {
+    if (!this.cart.length) { this.showNotice('Agregá productos al carrito primero.'); return; }
+    if (!await staycleanAuthToken()) { await this.openAccountDialog(); return; }
+    try {
+      if (await staycleanCustomerRpc('stayclean_is_staff') !== true) throw Error('Solo administradores pueden cargar ventas asistidas');
+      this.closeCart();
+      let modal = document.getElementById('assistedCheckoutModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'assistedCheckoutModal';
+        modal.className = 'fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4';
+        modal.innerHTML = `
+          <div class="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-5 shadow-xl space-y-4">
+            <div class="flex items-center justify-between"><h2 class="text-xl font-extrabold text-[#0E3A6B]">Venta asistida · Comprar para otro cliente</h2><button type="button" id="assistedClose" class="text-2xl" aria-label="Cerrar">×</button></div>
+            <p class="text-sm text-slate-600">El pedido se registra a nombre del cliente elegido. Tu cuenta queda registrada como operadora.</p>
+            <label class="block text-sm font-bold">Buscar cliente (nombre, teléfono o correo)</label>
+            <input id="assistedSearch" type="search" placeholder="Escribí para buscar..." class="w-full border rounded-lg p-3" />
+            <label class="block text-sm font-bold">Cliente</label>
+            <select id="assistedCustomer" class="w-full border rounded-lg p-3"><option value="">Seleccioná un cliente</option></select>
+            <div id="assistedCustomerInfo" class="text-sm text-slate-600"></div>
+            <div id="assistedOrderTotal" class="font-bold text-lg text-[#0E3A6B]"></div>
+            <label class="block text-sm font-bold">Forma de pago</label>
+            <select id="assistedPayment" class="w-full border rounded-lg p-3">
+              <option value="Efectivo contra entrega">Efectivo contra entrega</option>
+              <option value="Transferencia Bancaria">Transferencia bancaria</option>
+              <option value="Cuenta Corriente">Cuenta corriente</option>
+              <option value="A coordinar">A coordinar</option>
+            </select>
+            <div id="assistedError" role="alert" class="text-sm text-red-600"></div>
+            <button id="assistedConfirm" type="button" class="w-full bg-[#0E3A6B] text-white rounded-xl p-3 font-bold" disabled>Registrar pedido para este cliente</button>
+          </div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('#assistedClose').onclick = () => modal.remove();
+        modal.querySelector('#assistedSearch').oninput = () => this.searchAssistedCustomers();
+        modal.querySelector('#assistedCustomer').onchange = () => this.selectAssistedCustomer();
+        modal.querySelector('#assistedConfirm').onclick = () => this.submitAssistedOrder();
+      }
+      this.assistedCustomer = null;
+      this.assistedPrices = null;
+      this.assistedCustomers = [];
+      await this.searchAssistedCustomers();
+    } catch (error) { this.showNotice(error.message); }
+  }
+
+  async searchAssistedCustomers() {
+    const modal = document.getElementById('assistedCheckoutModal');
+    if (!modal) return;
+    const term = modal.querySelector('#assistedSearch').value.trim();
+    const select = modal.querySelector('#assistedCustomer');
+    const error = modal.querySelector('#assistedError');
+    select.innerHTML = '<option value="">Buscando clientes...</option>';
+    error.textContent = '';
+    try {
+      const rows = await staycleanCustomerRpc('stayclean_staff_assisted_customers', {p_search:term});
+      if (!modal.isConnected || modal.querySelector('#assistedSearch').value.trim() !== term) return;
+      this.assistedCustomers = rows || [];
+      select.innerHTML = '<option value="">Seleccioná un cliente</option>' + this.assistedCustomers.map((c,i)=>`<option value="${i}">${escapeCatalogText(c.name)} · ${escapeCatalogText(c.phone||'Sin teléfono')}</option>`).join('');
+      this.assistedCustomer = null;
+      this.assistedPrices = null;
+      modal.querySelector('#assistedConfirm').disabled = true;
+      modal.querySelector('#assistedOrderTotal').textContent = '';
+      modal.querySelector('#assistedCustomerInfo').textContent = this.assistedCustomers.length ? '' : 'No hay clientes que coincidan. Crealo desde ERP → Clientes.';
+    } catch (e) { select.innerHTML='<option value="">Error al buscar</option>';error.textContent=e.message; }
+  }
+
+  async selectAssistedCustomer() {
+    const modal=document.getElementById('assistedCheckoutModal');
+    if (!modal) return;
+    const value=modal.querySelector('#assistedCustomer').value;
+    const c=value===''?null:this.assistedCustomers[Number(value)];
+    this.assistedCustomer=c||null;
+    this.assistedPrices=null;
+    modal.querySelector('#assistedConfirm').disabled=true;
+    modal.querySelector('#assistedOrderTotal').textContent='';
+    if (!c) return;
+    modal.querySelector('#assistedCustomerInfo').textContent=`Entrega: ${c.address||'Sin dirección'}, ${c.city||'Sin localidad'} · ${c.cost_price_list_enabled?'Lista al costo':'Precio de venta'}`;
+    if (!c.phone || !c.address || !['Caviahue','Copahue'].includes(c.city)) {
+      modal.querySelector('#assistedError').textContent='Completá teléfono, dirección y localidad del cliente desde ERP → Clientes antes de confirmar.';
+      return;
+    }
+    try {
+      const prices=await staycleanCustomerRpc('stayclean_staff_assisted_prices',{p_customer_id:c.id,p_product_ids:this.cart.map(item=>item.id)});
+      if(this.assistedCustomer!==c) return;
+      if(this.cart.some(item=>!Number.isFinite(Number(prices[item.id]))||Number(prices[item.id])<=0))throw Error('Falta un precio válido para un producto');
+      this.assistedPrices=prices;
+      const total=Math.round(this.cart.reduce((sum,item)=>sum+Number(prices[item.id])*item.quantity,0)*100)/100;
+      modal.querySelector('#assistedOrderTotal').textContent='Total para '+c.name+': '+Formatter.money(total);
+      modal.querySelector('#assistedError').textContent='';
+      modal.querySelector('#assistedConfirm').disabled=false;
+    } catch(e){modal.querySelector('#assistedError').textContent=e.message;}
+  }
+
+  async submitAssistedOrder() {
+    if(this.sendingOrder||!this.assistedCustomer||!this.assistedPrices)return;
+    const modal=document.getElementById('assistedCheckoutModal');
+    const button=modal.querySelector('#assistedConfirm');
+    const error=modal.querySelector('#assistedError');
+    const c=this.assistedCustomer;
+    const method=modal.querySelector('#assistedPayment').value;
+    if(method==='Cuenta Corriente'&&!c.credit_account_enabled){error.textContent='Este cliente no tiene habilitada la cuenta corriente.';return;}
+    this.sendingOrder=true;
+    button.disabled=true;
+    try {
+      const total=Math.round(this.cart.reduce((sum,item)=>sum+Number(this.assistedPrices[item.id])*item.quantity,0)*100)/100;
+      const requestId=this.pendingRequestId||(this.pendingRequestId=crypto.randomUUID());
+      sessionStorage.setItem('stayclean_pending_order_id',requestId);
+      const result=await staycleanCustomerRpc('stayclean_staff_assisted_order',{p_order:{
+        request_id:requestId,customer_id:c.id,customer_name:c.name,customer_phone:c.phone,
+        customer_email:c.email||'',delivery_address:c.address,delivery_city:c.city,
+        payment_method:method,expected_cost_total:total,
+        items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity}))
+      }});
+      this.cart=[];
+      this.saveCart();
+      this.pendingRequestId=null;
+      sessionStorage.removeItem('stayclean_pending_order_id');
+      modal.remove();
+      await this.loadProducts();
+      this.showNotice('Venta asistida registrada para '+c.name+'. Pedido '+result.order_number+'. Stock descontado.');
+    }catch(e){error.textContent='No se registró el pedido: '+e.message+'. El carrito permanece intacto.';}
+    finally{this.sendingOrder=false;if(button.isConnected)button.disabled=false;}
   }
 
   async proceedToCheckout() {
