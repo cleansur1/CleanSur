@@ -1,3 +1,4 @@
+import { bindArchive, isCancelled } from './archive.js?v=1';
 import { statusColor } from './status_badge.js';
 import { db } from '../db.js';
 import { Formatter, PackagingEngine, LogisticsCostDistributor } from '../models.js';
@@ -252,7 +253,7 @@ export const ComprasView = {
                   const isConciliated = (!p.reconciliation || p.reconciliation.status === 'CONCILIADA') && Math.abs(diff) <= 0.05;
 
                   return `
-                    <tr class="group hover:bg-slate-50 transition">
+                    <tr data-archive-row ${isCancelled(p.status) ? `data-archive-id="${escapeHtml(p.id)}"` : ''} class="group hover:bg-slate-50 transition">
                       <td class="py-3 px-4 font-bold text-slate-700 whitespace-nowrap">${Formatter.date(p.date)}</td>
                       <td class="py-3 px-4">
                         <span class="font-mono font-black text-blue-900 block">${escapeHtml(p.invoice_number)}</span>
@@ -295,7 +296,7 @@ export const ComprasView = {
                         </span>
                       </td>
                       <td class="sticky right-0 border-l border-slate-200 bg-white px-3 py-3 text-center whitespace-nowrap group-hover:bg-slate-50">
-                        <div class="flex items-center justify-center gap-1">
+                        <div class="flex items-center justify-center gap-1" data-archive-actions>
                         <button type="button" onclick="window.comprasModule.viewCentralPurchase(${attributeArgument(p.id)})" aria-label="Ver factura" title="Ver factura" class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700">
                           <i data-lucide="eye" aria-hidden="true" class="w-4 h-4"></i>
                         </button>
@@ -362,6 +363,7 @@ export const ComprasView = {
       });
     }
 
+    bindArchive(container, 'purchases');
     if (window.lucide) window.lucide.createIcons();
   },
 
