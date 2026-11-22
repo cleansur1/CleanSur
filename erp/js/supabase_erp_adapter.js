@@ -12,6 +12,23 @@ export async function readCentral(table, { select = '*', order = 'created_at.des
   if (!response.ok) throw new Error(`No se pudo leer ${table} desde Supabase (${response.status})`);
   return response.json();
 }
+export async function countNewStoreOrders() {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error('Sesión de CleanSur requerida');
+  const params = new URLSearchParams({ select: 'id', status: 'ilike.nuevo', source: 'eq.TIENDA_ONLINE', limit: '1' });
+  const response = await fetch(`${STAYCLEAN_SUPABASE_URL}/rest/v1/orders?${params}`, {
+    method: 'HEAD',
+    headers: {
+      apikey: STAYCLEAN_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+      Prefer: 'count=exact'
+    }
+  });
+  const count = response.headers.get('content-range')?.split('/').pop();
+  if (!response.ok || !/^\d+$/.test(count ?? '')) throw new Error('No se pudo consultar la cantidad de pedidos nuevos');
+  return Number(count);
+}
+
 export async function readCentralDashboard() {
   const session = getAdminSession();
   if (!session?.access_token) throw new Error('Sesión de Supabase requerida');

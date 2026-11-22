@@ -1,9 +1,9 @@
 // Controlador Principal & Router para Limpieza Caviahue ERP v6.0
 import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
-import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
+import { readCentral, readCentralDashboard, countNewStoreOrders, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
 import { DashboardView } from './views/dashboard.js?v=8.1';
-import { VentasView } from './views/ventas.js?v=mobile-1';
+import { VentasView } from './views/ventas.js?v=order-alert-1';
 import { ComprasView } from './views/compras.js?v=archive-1';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
@@ -370,7 +370,47 @@ window.app = app;
 
 // Modo central de validación: reutiliza las 22 pantallas originales sin escrituras locales.
 // Activación explícita: index.html?central=1. No es todavía el ERP transaccional.
-async function bootCentralReadOnly() {
+async function startOrderAlerts() {
+  const button = document.getElementById('new-orders-alert');
+  const badge = button.querySelector('[data-order-count]');
+  let loading = false;
+  async function refresh() {
+    if (document.hidden || loading) return;
+    loading = true;
+    try {
+      const count = await countNewStoreOrders();
+      const label = count === 1 ? '1 pedido nuevo' : `${count} pedidos nuevos`;
+      badge.hidden = count === 0;
+      badge.textContent = count > 99 ? '99+' : String(count);
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      button.hidden = false;
+    } catch {
+      if (!button.hidden) button.title = 'Pedidos nuevos · actualización pendiente';
+    } finally {
+      loading = false;
+    }
+  }
+
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      db.centralSetTable('orders', await readCentral('orders', { order: 'id.desc', limit: 1000 }));
+      app.navigate('ventas', { action: 'prepare' });
+    } catch {
+      app.showNotification('No se pudieron actualizar los pedidos. Volvé a intentar.', 'error');
+    } finally {
+      button.disabled = false;
+      refresh();
+    }
+  };
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('online', refresh);
+  window.setInterval(refresh, 20_000);
+  refresh();
+}
+
+function bootCentralReadOnly() {
   const shield = document.createElement('div');
   shield.id = 'central-access';
   shield.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f1f5f9;display:grid;place-items:center;font-family:system-ui';
@@ -438,6 +478,7 @@ async function bootCentralReadOnly() {
       app.centralDashboard = centralDashboard;
       shield.remove();
       app.init();
+      startOrderAlerts();
       // Acceso central: sin zócalo de diagnóstico. Mantener cierre de sesión accesible.
       const exit = document.createElement('button');
       exit.type = 'button';
@@ -448,7 +489,7 @@ async function bootCentralReadOnly() {
       document.body.append(exit);
       // Bloqueo de controles de escritura: navegación permitida, formularios y acciones no.
       document.addEventListener('click', e => {
-        if (e.target.closest('dialog form[method=dialog]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu')) return;
+        if (e.target.closest('dialog form[method=dialog]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu, #new-orders-alert')) return;
         const control = e.target.closest('button, input[type=submit], a[onclick], [role=button]');
         if (control) {
           const handler = control.getAttribute('onclick') || '';

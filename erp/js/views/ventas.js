@@ -120,7 +120,7 @@ export const VentasView = {
             <button type="button" data-new-sale class="rounded-lg bg-emerald-700 px-4 py-2 text-white">Nueva venta</button>
           </header>
           <div data-sales-history><p>Cargando ventas y pedidos…</p></div>
-          <details class="rounded-xl border border-slate-200 bg-white p-4"><summary class="cursor-pointer font-bold">Pedidos en preparación</summary><div class="mt-4" data-local-orders></div></details>
+          <details data-order-preparation ${params.action === 'prepare' ? 'open' : ''} class="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-4"><summary class="cursor-pointer font-bold">Pedidos en preparación</summary><div class="mt-4" data-local-orders></div></details>
           ${!window.app.centralReadOnly && sales.length ? '<details class="rounded-xl border border-slate-200 bg-white p-4"><summary class="cursor-pointer font-bold">Ventas anteriores de este dispositivo</summary><div class="mt-4" data-local-sales></div></details>' : ''}
         </section>`;
       container.querySelector('[data-new-sale]').onclick = () => window.app.navigate('ventas', { action: 'new' });
@@ -128,6 +128,10 @@ export const VentasView = {
       if (localSales) this.renderSalesList(localSales, sales);
       PedidosView.render(container.querySelector('[data-local-orders]'));
       this.renderSalesHistory(container.querySelector('[data-sales-history]'));
+      if (params.action === 'prepare') {
+        const preparation = container.querySelector('[data-order-preparation]');
+        requestAnimationFrame(() => preparation.scrollIntoView({ block: 'start' }));
+      }
     }
   },
 
