@@ -1,3 +1,4 @@
+import { statusColor } from './status_badge.js';
 import { db } from '../db.js';
 import { Formatter, PackagingEngine, LogisticsCostDistributor } from '../models.js';
 import { OcrFacturasView } from './ocr_facturas.js?v=10.6';
@@ -289,7 +290,7 @@ export const ComprasView = {
                       </td>
 
                       <td class="py-3 px-3 text-center">
-                        <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${p.status === 'ANULADA' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
+                        <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${statusColor(p.status)}">
                           ${escapeHtml(p.status)}
                         </span>
                       </td>

@@ -3,8 +3,8 @@ import { db } from './db.js';
 import { signInAdmin, signOutAdmin } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js';
 import { DashboardView } from './views/dashboard.js?v=8.1';
-import { VentasView } from './views/ventas.js?v=8.6';
-import { ComprasView } from './views/compras.js?v=13.9';
+import { VentasView } from './views/ventas.js?v=8.7';
+import { ComprasView } from './views/compras.js?v=14.0';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
@@ -20,7 +20,7 @@ import { AuditoriaView } from './views/auditoria.js?v=6.0';
 import { ConfiguracionView } from './views/configuracion.js?v=6.0';
 import { UsuariosView } from './views/usuarios.js?v=6.1';
 import { OcrFacturasView } from './views/ocr_facturas.js?v=10.6';
-import { CajaView } from './views/caja.js?v=6.0';
+import { CajaView } from './views/caja.js?v=6.1';
 import { ArcaView } from './views/arca.js?v=6.0';
 import { TiendaView } from './views/tienda.js?v=6.1';
 
@@ -464,7 +464,7 @@ async function bootCentralReadOnly() {
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
             (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale, [data-history-action]') ||
               handler.startsWith('window.pedidosModule.convertOrder(') || handler.startsWith('window.ventasModule.removeFromCart('));
-          if (salesControl || purchaseOrderControl || safeNavigation || profileControl || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          if ((app.currentRoute === "caja" && control.matches("[data-cash-action]")) || salesControl || purchaseOrderControl || safeNavigation || profileControl || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }

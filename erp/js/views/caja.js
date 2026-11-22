@@ -1,10 +1,12 @@
 // Módulo de Caja Diaria, Arqueo Obligatorio & Cierre con Lote ARCA
 // Limpieza Caviahue ERP
+import { renderCentralCash } from './caja_central.js';
 import { db } from '../db.js';
 import { Formatters } from '../models.js';
 
 export const CajaView = {
   render(container) {
+    if (window.app.centralReadOnly) return renderCentralCash(container);
     const todayStr = new Date().toISOString().substring(0, 10);
     const registers = db.getCashRegisters();
     const activeRegister = registers.find(r => r.status === 'ABIERTA');

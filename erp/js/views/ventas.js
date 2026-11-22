@@ -1,3 +1,4 @@
+import { statusColor } from './status_badge.js';
 // Módulo de Ventas / POS para Limpieza Caviahue
 // Cálculo en vivo, descuentos, listas de precios, unidades/conversiones, descuento automático de stock y anulación.
 
@@ -38,7 +39,7 @@ export const VentasView = {
             && (!row.payment_status || row.payment_status === 'PENDIENTE');
           return `<article class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 py-3">
             <div><strong>${esc(row.number)} · ${esc(row.customer)}</strong>
-              <p class="text-xs text-slate-600">${esc(row.channel)} · ${Formatter.money(Number(row.total))} · ${esc(row.status)}</p>
+              <p class="text-xs text-slate-600">${esc(row.channel)} · ${Formatter.money(Number(row.total))} · <span class="rounded px-2 py-0.5 font-semibold ${statusColor(row.status)}">${esc(row.status)}</span></p>
             </div>
             <div class="flex gap-2">
               ${(editable ? [['view','Ver','eye'],['edit','Editar','pencil'],['void','Eliminar (anular)','trash-2']] : [['view','Ver','eye']]).map(([action,label,icon]) =>
@@ -118,7 +119,7 @@ export const VentasView = {
           </header>
           <div data-sales-history><p>Cargando ventas y pedidos…</p></div>
           <details class="rounded-xl border border-slate-200 bg-white p-4"><summary class="cursor-pointer font-bold">Pedidos en preparación</summary><div class="mt-4" data-local-orders></div></details>
-          ${sales.length ? '<details class="rounded-xl border border-slate-200 bg-white p-4"><summary class="cursor-pointer font-bold">Ventas anteriores de este dispositivo</summary><div class="mt-4" data-local-sales></div></details>' : ''}
+          ${!window.app.centralReadOnly && sales.length ? '<details class="rounded-xl border border-slate-200 bg-white p-4"><summary class="cursor-pointer font-bold">Ventas anteriores de este dispositivo</summary><div class="mt-4" data-local-sales></div></details>' : ''}
         </section>`;
       container.querySelector('[data-new-sale]').onclick = () => window.app.navigate('ventas', { action: 'new' });
       const localSales = container.querySelector('[data-local-sales]');
