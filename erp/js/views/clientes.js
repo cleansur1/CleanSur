@@ -208,11 +208,14 @@ export const ClientesView = {
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Lista de Precios Asignada</label>
-              <select name="price_list_id" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
+              <select ${window.app.centralReadOnly && customer ? 'id="centralPriceList"' : ''} name="price_list_id" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                ${window.app.centralReadOnly && customer && !priceLists.some(pl => pl.id === customer.price_list_id) ? '<option value="">Lista habitual</option>' : ''}
                 ${priceLists.map(pl => `
-                  <option value="${pl.id}" ${customer && customer.price_list_id === pl.id ? 'selected' : ''}>${pl.name}</option>
+                  <option value="${pl.id}" ${customer && !(window.app.centralReadOnly && customer.cost_price_list_enabled) && customer.price_list_id === pl.id ? 'selected' : ''}>${pl.name}</option>
                 `).join('')}
+                ${window.app.centralReadOnly && customer ? `<option value="internal-cost" ${customer.cost_price_list_enabled ? 'selected' : ''}>Al costo</option>` : ''}
               </select>
+              ${window.app.centralReadOnly && customer ? '<button type="button" data-save-cost-list class="mt-2 text-sm font-semibold text-blue-800 underline">Guardar lista de precios</button><p data-cost-list-status role="status" class="text-sm mt-1"></p>' : ''}
             </div>
 
             <div>
@@ -274,6 +277,34 @@ export const ClientesView = {
       </div>
     `;
 
+    const priceList = container.querySelector('#centralPriceList');
+    const saveList = container.querySelector('[data-save-cost-list]');
+    saveList?.addEventListener('click', async () => {
+      const status = container.querySelector('[data-cost-list-status]');
+      const enabled = priceList.value === 'internal-cost';
+      if (!enabled && priceList.value && priceList.value !== customer.price_list_id) {
+        status.textContent = 'Elegí la lista vigente para quitar Al costo.';
+        return;
+      }
+      saveList.disabled = true;
+      try {
+        const token = getAdminSession()?.access_token || sessionStorage.getItem('stayclean_staff_access_token');
+        const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_set_cost_price_list', {
+          method: 'POST',
+          headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({p_customer_id: customer.id, p_enabled: enabled})
+        });
+        const result = await response.json();
+        if (!response.ok || result !== enabled) throw Error(result?.message || 'No se pudo guardar la lista');
+        db.centralSetTable('customers', db.getCustomers().map(row =>
+          row.id === customer.id ? {...row, cost_price_list_enabled: enabled} : row));
+        status.textContent = enabled ? 'Lista al costo asignada' : 'Lista al costo desactivada';
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        saveList.disabled = false;
+      }
+    });
     if (window.lucide) window.lucide.createIcons();
   },
 
