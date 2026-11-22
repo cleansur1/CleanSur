@@ -249,7 +249,7 @@ export const VentasView = {
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <!-- Columna Izquierda: Búsqueda y Selección de Productos (2 cols) -->
-          <div class="lg:col-span-2 space-y-4">
+          <div class="lg:col-span-2 min-w-0 space-y-4">
             <!-- Selector de Cliente y Lista de Precios -->
             <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -390,7 +390,7 @@ export const VentasView = {
               <!-- Botón Confirmar Venta -->
               <button id="btnConfirmSale" onclick="window.ventasModule.confirmSale()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50">
                 <i data-lucide="check-circle" class="w-5 h-5"></i>
-                Confirmar y Facturar Venta
+                Confirmar venta
               </button>
             </div>
           </div>
