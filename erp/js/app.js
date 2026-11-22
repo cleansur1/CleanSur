@@ -8,7 +8,7 @@ import { ComprasView } from './views/compras.js?v=archive-1';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
-import { ClientesView } from './views/clientes.js?v=store-credit-1';
+import { ClientesView } from './views/clientes.js?v=internal-withdrawals-1';
 import { CuentasCorrientesView } from './views/cuentas_corrientes.js?v=6.0';
 import { ComparadorView } from './views/comparador.js?v=6.0';
 import { ReposicionView } from './views/reposicion.js?v=6.0';
@@ -464,7 +464,7 @@ async function bootCentralReadOnly() {
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
             (control.matches('[data-new-sale], [data-retry-sales], #btnConfirmSale, [data-history-action]') ||
               handler.startsWith('window.pedidosModule.convertOrder(') || handler.startsWith('window.ventasModule.removeFromCart('));
-          if ((app.currentRoute === "caja" && control.matches("[data-cash-action]")) || salesControl || purchaseOrderControl || safeNavigation || (app.currentRoute === 'clientes' && control.matches('[data-customer-credit]')) || profileControl || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
+          if ((app.currentRoute === "caja" && control.matches("[data-cash-action]")) || salesControl || purchaseOrderControl || safeNavigation || (app.currentRoute === 'clientes' && control.matches('[data-customer-credit], [data-customer-withdrawal]')) || profileControl || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }
