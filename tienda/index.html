@@ -195,7 +195,7 @@
       </div>
       <div class="shrink-0 flex items-center gap-3 relative z-10">
         <div class="bg-white/15 backdrop-blur-md border border-white/20 rounded-xl p-3 text-center min-w-[90px]">
-          <span class="block text-2xl font-black text-white">35+</span>
+          <span id="catalogTotal" class="block text-2xl font-black text-white" aria-live="polite">…</span>
           <span class="text-[9px] text-[#8FD0F4] uppercase font-bold tracking-wider">Productos</span>
         </div>
         <div class="bg-white/15 backdrop-blur-md border border-white/20 rounded-xl p-3 text-center min-w-[100px]">
@@ -282,7 +282,7 @@
             </div>
           </div>
 
-          <!-- Contador de productos estilo Voltra ("35 productos") -->
+          <!-- Cantidad de resultados de los filtros -->
           <div id="productCountLabel" class="text-slate-500 font-semibold whitespace-nowrap">
             Cargando catálogo...
           </div>
@@ -570,6 +570,6 @@
   </dialog>
 
   <!-- Script de la Tienda Standalone -->
-  <script type="module" src="../erp/js/tienda_standalone.js?v=assisted-live-2"></script>
+  <script type="module" src="../erp/js/tienda_standalone.js?v=catalog-total-1"></script>
 </body>
 </html>

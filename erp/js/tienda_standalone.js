@@ -25,7 +25,7 @@ class TiendaStandaloneApp {
   }
 
   init() {
-    this.loadProducts();
+    this.loadProducts().finally(() => this.watchCatalogTotal());
     this.restoreCustomerSession();
     this.setupEventListeners();
     this.setupAccountDialog();
@@ -298,10 +298,41 @@ class TiendaStandaloneApp {
     }
   }
 
+  updateCatalogTotal(rows) {
+    const label = document.getElementById('catalogTotal');
+    if (!label) return;
+    const variants = new Set(rows.map(({sku, id}) => {
+      const normalizedSku = sku?.trim().toUpperCase();
+      return normalizedSku ? `sku:${normalizedSku}` : `id:${id}`;
+    }));
+    const total = String(variants.size);
+    if (label.textContent !== total) label.textContent = total;
+  }
+
+  watchCatalogTotal() {
+    const label = document.getElementById('catalogTotal');
+    if (!label) return;
+    let refreshing = false;
+    const refresh = async () => {
+      if (document.hidden || refreshing) return;
+      refreshing = true;
+      try {
+        this.updateCatalogTotal(await staycleanPublicCatalog());
+      } catch (error) {
+        console.error('No se pudo actualizar el total del catálogo', error);
+      } finally {
+        refreshing = false;
+      }
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.setInterval(refresh, 60_000);
+  }
+
   async loadProducts() {
     // Catálogo remoto: jamás mostrar stock local como si fuera compartido.
     try {
       const rows = await staycleanPublicCatalog();
+      this.updateCatalogTotal(rows);
       this.products = rows.map(p => ({
         ...p, current_stock: Number(p.available_stock),
         sale_price: Number(p.sale_price), in_stock: Number(p.available_stock) > 0,
@@ -312,6 +343,8 @@ class TiendaStandaloneApp {
       this.applyFilters();
       void this.loadAromaFilter();
     } catch (error) {
+      const label = document.getElementById('catalogTotal');
+      if (label) label.textContent = '—';
       this.products = [];
       this.applyFilters();
       console.error('No se pudo cargar el catálogo de Supabase', error);
