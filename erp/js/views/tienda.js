@@ -2,6 +2,7 @@
 // Gestión completa de catálogo: Crear nuevos productos, editar información, precios, fotos y stock
 import { db } from '../db.js';
 import { Formatter } from '../models.js';
+import { staycleanPublicCatalog } from '../supabase_public.js';
 
 const publicUrl = 'https://cleansur1.github.io/CleanSur/tienda/';
 const shareUrl = 'https://wa.me/?text=' + encodeURIComponent(
@@ -14,7 +15,13 @@ export const TiendaView = {
   currentCategoryFilter: 'ALL',
   searchQuery: '',
 
-  render(container) {
+  render(container, { promoAvailability } = {}) {
+    const request = Symbol();
+    this.catalogRequest = request;
+    const centralCatalog = window.app.centralReadOnly;
+    const displayStock = product => centralCatalog && /^PROMO-/i.test(product.sku || '')
+      ? promoAvailability?.get(product.sku)
+      : Number(product.current_stock || 0);
     this.container = container;
     const allProducts = db.getProducts();
     const categories = db.getCategories();
@@ -97,11 +104,11 @@ export const TiendaView = {
             </div>
             <div class="bg-white/5 rounded-xl p-3">
               <span class="text-[10px] text-slate-400 uppercase font-semibold">En Stock Inmediato</span>
-              <p class="text-xl font-bold text-emerald-400 mt-0.5">${allProducts.filter(p => (p.current_stock || 0) > 0).length}</p>
+              <p class="text-xl font-bold text-emerald-400 mt-0.5">${allProducts.filter(p => displayStock(p) > 0).length}</p>
             </div>
             <div class="bg-white/5 rounded-xl p-3">
               <span class="text-[10px] text-slate-400 uppercase font-semibold">Sin Stock (Agotados)</span>
-              <p class="text-xl font-bold text-rose-400 mt-0.5">${allProducts.filter(p => (p.current_stock || 0) <= 0).length}</p>
+              <p class="text-xl font-bold text-rose-400 mt-0.5">${allProducts.filter(p => displayStock(p) === 0).length}</p>
             </div>
             <div class="bg-white/5 rounded-xl p-3">
               <span class="text-[10px] text-slate-400 uppercase font-semibold">Pedidos Web Pendientes</span>
@@ -192,7 +199,8 @@ export const TiendaView = {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
             ${products.map((p, idx) => {
-              const inStock = (p.current_stock || 0) > 0;
+              const stock = displayStock(p);
+              const inStock = stock > 0;
               const salePrice = p.sale_price || 0;
               let referencePrice = Number(p.reference_price) || 0;
               let discountPct = 0;
@@ -214,7 +222,7 @@ export const TiendaView = {
                       
                       <!-- Badges Flotantes (Izquierda) -->
                       <div class="absolute top-3 left-3 flex flex-col gap-1.5 z-10 items-start">
-                        ${!inStock ? `
+                        ${stock === 0 ? `
                           <span class="px-2.5 py-1 rounded-md text-[11px] font-bold bg-white text-slate-800 border border-slate-300 shadow-xs">
                             Agotado
                           </span>
@@ -268,7 +276,7 @@ export const TiendaView = {
 
                       <!-- Información administrativa de stock y costo -->
                       <div class="pt-1 flex justify-between items-center text-[11px] text-slate-500 border-t border-slate-100">
-                        <span>Stock: <strong class="${inStock ? 'text-emerald-700' : 'text-rose-600'}">${p.current_stock || 0} ${p.sale_unit || 'U'}</strong></span>
+                        <span>Stock: <strong class="${inStock ? 'text-emerald-700' : 'text-rose-600'}">${stock == null ? 'Sin confirmar' : stock + ' ' + (p.sale_unit || 'U')}</strong></span>
                         <span>Costo: <strong class="text-slate-700 font-mono">${Formatter.money(p.caviahue_cost || 0)}</strong></span>
                       </div>
                     </div>
@@ -312,6 +320,14 @@ export const TiendaView = {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+    if (centralCatalog && !promoAvailability) {
+      staycleanPublicCatalog().then(rows => {
+        if (this.catalogRequest !== request || window.app.currentRoute !== 'tienda') return;
+        this.render(container, {
+          promoAvailability: new Map(rows.map(row => [row.sku, Number(row.available_stock)]))
+        });
+      }).catch(error => console.error('No se pudo consultar el stock disponible de las promos', error));
+    }
     this.setupAdminActions();
   },
 
