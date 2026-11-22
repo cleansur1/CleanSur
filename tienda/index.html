@@ -408,6 +408,7 @@
           </div>
 
           <!-- Botón de Acción Principal -->
+          <button id="btnAssistedCheckout" type="button" onclick="window.tiendaApp.openAssistedCheckout()" class="hidden w-full mb-2 py-3 rounded-xl font-bold text-sm border-2 border-[#0E3A6B] text-[#0E3A6B] bg-white hover:bg-blue-50"><span>Comprar para otro cliente · Venta asistida</span></button>
           <button id="btnProceedCheckout" onclick="window.tiendaApp.proceedToCheckout()" class="btn-stayclean w-full py-3.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2">
             <span>Iniciar Compra / Pedido</span>
             <i data-lucide="arrow-right" class="w-4 h-4"></i>
@@ -421,7 +422,7 @@
   <!-- ======================================================== -->
   <!-- 8. MODAL DE PERFIL DE CLIENTE (OBLIGATORIO PARA PEDIDOS) -->
   <!-- ======================================================== -->
-  <div id="profileModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+  <div id="profileModal" class="hidden fixed inset-0 z-[110] overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-fade-in">
       
       <!-- Encabezado del Modal CleanSur -->
@@ -569,6 +570,6 @@
   </dialog>
 
   <!-- Script de la Tienda Standalone -->
-  <script type="module" src="../erp/js/tienda_standalone.js?v=cost-list-1"></script>
+  <script type="module" src="../erp/js/tienda_standalone.js?v=assisted-live-1"></script>
 </body>
 </html>
