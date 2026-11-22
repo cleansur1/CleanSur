@@ -4,7 +4,7 @@ import { signInAdmin, signOutAdmin, restoreAdminSession, refreshAdminSession } f
 import { readCentral, readCentralDashboard, countNewStoreOrders, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
 import { DashboardView } from './views/dashboard.js?v=8.1';
 import { VentasView } from './views/ventas.js?v=archive-controls-2';
-import { ComprasView } from './views/compras.js?v=archive-controls-2';
+import { ComprasView } from './views/compras.js?v=aromas-edit-1';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
