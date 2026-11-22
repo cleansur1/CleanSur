@@ -131,6 +131,7 @@ class App {
     const mobileSidebar = document.getElementById('sidebar');
     if (window.innerWidth < 1024 && mobileSidebar && !mobileSidebar.classList.contains('-translate-x-full')) {
       mobileSidebar.classList.add('-translate-x-full');
+      document.getElementById('btnMobileMenu')?.setAttribute('aria-expanded', 'false');
     }
 
     // Renderizar vista
@@ -181,7 +182,13 @@ class App {
     const sidebar = document.getElementById('sidebar');
     if (menuBtn && sidebar) {
       menuBtn.addEventListener('click', () => {
-        sidebar.classList.toggle('-translate-x-full');
+        const closed = sidebar.classList.toggle('-translate-x-full');
+        menuBtn.setAttribute('aria-expanded', String(!closed));
+      });
+      document.getElementById('btnCloseMobileMenu')?.addEventListener('click', () => {
+        sidebar.classList.add('-translate-x-full');
+        menuBtn.setAttribute('aria-expanded', 'false');
+        menuBtn.focus();
       });
     }
   }
@@ -441,7 +448,7 @@ async function bootCentralReadOnly() {
       document.body.append(exit);
       // Bloqueo de controles de escritura: navegación permitida, formularios y acciones no.
       document.addEventListener('click', e => {
-        if (e.target.closest('dialog form[method=dialog]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link')) return;
+        if (e.target.closest('dialog form[method=dialog]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu')) return;
         const control = e.target.closest('button, input[type=submit], a[onclick], [role=button]');
         if (control) {
           const handler = control.getAttribute('onclick') || '';
