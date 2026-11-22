@@ -8,7 +8,7 @@ import { ComprasView } from './views/compras.js?v=archive-1';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
-import { ClientesView } from './views/clientes.js?v=cost-list-1';
+import { ClientesView } from './views/clientes.js?v=cost-list-save-2';
 import { CuentasCorrientesView } from './views/cuentas_corrientes.js?v=6.0';
 import { ComparadorView } from './views/comparador.js?v=6.0';
 import { ReposicionView } from './views/reposicion.js?v=6.0';
@@ -476,7 +476,7 @@ async function bootCentralReadOnly() {
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }
       }, true);
-      document.addEventListener('submit', e => { if (e.target.matches('dialog form[method=dialog]') || (app.currentRoute === 'productos' && e.target.matches('#productForm[data-product-edit="true"]')) || (e.target.matches('#centralPurchaseDetailModal [data-aroma-editor] form') && app.currentRoute==='compras') || (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
+      document.addEventListener('submit', e => { if (e.target.matches('dialog form[method=dialog]') || (app.currentRoute === 'clientes' && e.target.matches('[data-central-customer-list-form]')) || (app.currentRoute === 'productos' && e.target.matches('#productForm[data-product-edit="true"]')) || (e.target.matches('#centralPurchaseDetailModal [data-aroma-editor] form') && app.currentRoute==='compras') || (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
     } catch (err) {
       error.textContent = err.message || 'No se pudo iniciar la sesión';
       await signOutAdmin().catch(()=>{});
