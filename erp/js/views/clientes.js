@@ -47,6 +47,15 @@ export const ClientesView = {
         row.className = 'border-t border-slate-200 py-2 text-sm';
         row.textContent = [account.name, account.email, account.confirmed ? 'Correo confirmado' : 'Correo pendiente',
           account.customer_id ? 'Perfil vinculado' : 'Perfil pendiente', account.qa ? 'Cuenta de prueba' : null].filter(Boolean).join(' · ');
+        if (account.customer_id && !account.qa && db.getCustomer(account.customer_id)) {
+          const action = document.createElement('button');
+          action.type = 'button';
+          action.className = 'ml-3 text-blue-800 font-semibold underline';
+          action.textContent = 'Ver ficha';
+          action.setAttribute('onclick', "window.app.navigate('clientes', {viewId: this.dataset.customerId})");
+          action.dataset.customerId = account.customer_id;
+          row.append(action);
+        }
         list.append(row);
       }
     } catch {
@@ -303,6 +312,16 @@ export const ClientesView = {
           </div>
         </div>
 
+        ${window.app.centralReadOnly ? `
+          <section class="bg-white p-5 rounded-xl border border-slate-200">
+            <h2 class="font-bold">Cuenta Corriente en la tienda</h2>
+            <p class="text-sm mb-3">${customer.credit_account_enabled ? 'Habilitada' : 'No disponible'}</p>
+            <button type="button" data-customer-credit class="px-4 py-2 rounded-lg bg-[#0E3A6B] text-white text-sm font-semibold">
+              ${customer.credit_account_enabled ? 'Deshabilitar Cuenta Corriente' : 'Habilitar Cuenta Corriente'}
+            </button>
+          </section>
+        ` : ''}
+
         <!-- Métricas del Cliente -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -367,7 +386,32 @@ export const ClientesView = {
       </div>
     `;
 
+    const creditButton = container.querySelector('[data-customer-credit]');
+    creditButton?.addEventListener('click', () => this.setStoreCredit(customer, creditButton));
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  async setStoreCredit(customer, button) {
+    const token = getAdminSession()?.access_token || sessionStorage.getItem('stayclean_staff_access_token');
+    const enabled = !customer.credit_account_enabled;
+    button.disabled = true;
+    try {
+      const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_set_customer_credit', {
+        method: 'POST',
+        headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({p_customer_id: customer.id, p_enabled: enabled})
+      });
+      const result = await response.json();
+      if (!response.ok || result !== enabled) throw Error(result?.message || 'No se pudo actualizar Cuenta Corriente');
+      db.centralSetTable('customers', db.getCustomers().map(row =>
+        row.id === customer.id ? {...row, credit_account_enabled: enabled} : row));
+      window.app.showNotification(enabled ? 'Cuenta Corriente habilitada' : 'Cuenta Corriente deshabilitada', 'success');
+      if (button.isConnected) window.app.navigate('clientes', {viewId: customer.id});
+    } catch (error) {
+      window.app.showNotification(error.message, 'error');
+    } finally {
+      button.disabled = false;
+    }
   },
 
   attachListFilters() {
