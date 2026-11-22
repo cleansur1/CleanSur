@@ -1158,7 +1158,6 @@ class TiendaStandaloneApp {
       }
       if (this.customerProfile !== profile) return;
     }
-    await this.checkAssistedAccess();
     const modal = document.getElementById('orderConfirmationModal');
     const content = document.getElementById('orderConfirmationContent');
     if (!modal || !content) return;
@@ -1203,7 +1202,7 @@ class TiendaStandaloneApp {
             <div>
               <span class="text-slate-400 block">Cliente:</span>
               <strong class="text-slate-800">${escapeCatalogText(prof.name)}</strong>
-              ${this.isStaff ? '<button type="button" onclick="window.tiendaApp.openAssistedCheckout()" class="block mt-1 text-blue-700 font-bold underline text-[11px]">Cambiar cliente · Venta asistida</button>' : ''}
+              <button type="button" onclick="window.tiendaApp.openAssistedCheckout()" class="block mt-1 text-blue-700 font-bold underline text-[11px]">Cambiar cliente · Venta asistida</button>
             </div>
             <div>
               <span class="text-slate-400 block">Contacto WhatsApp:</span>
