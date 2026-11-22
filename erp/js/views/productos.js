@@ -4,13 +4,21 @@
 import { db } from '../db.js';
 import { editCentralProduct, readCentral } from '../supabase_erp_adapter.js?v=product-edit-1';
 import { Formatter, PricingCalculator } from '../models.js';
+import { staycleanPublicCatalog } from '../supabase_public.js';
 
 let productChart = null;
+let bundleAvailability = new Map();
+const bundleStock = product => bundleAvailability.has(product.sku) ? bundleAvailability.get(product.sku) : Number(product.current_stock || 0);
+async function refreshBundleAvailability() {
+  const catalog = await staycleanPublicCatalog();
+  bundleAvailability = new Map(catalog.filter(p => String(p.sku || '').startsWith('PROMO-')).map(p => [p.sku, Number(p.available_stock || 0)]));
+}
 const escapeProductText = value => String(value ?? '').replace(/[&<>"']/g, ch =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 
 export const ProductosView = {
-  render(container, params = {}) {
+  async render(container, params = {}) {
+    try { await refreshBundleAvailability(); } catch (error) { console.warn('No se pudo actualizar disponibilidad de promociones', error); }
     const isNew = params.action === 'new';
     const editId = params.editId;
     const viewId = params.viewId;
@@ -90,8 +98,9 @@ export const ProductosView = {
               <tbody class="divide-y divide-slate-100" id="productsTableBody">
                 ${products.map(p => {
                   const cat = categories.find(c => c.id === p.category_id);
-                  const isLow = p.current_stock > 0 && p.current_stock <= (p.min_stock || 5);
-                  const isOut = p.current_stock <= 0;
+                  const shownStock = bundleStock(p);
+                  const isLow = shownStock > 0 && shownStock <= (p.min_stock || 5);
+                  const isOut = shownStock <= 0;
                   const isLowMargin = p.margin_pct < (p.target_margin || 35);
                   return `
                     <tr class="hover:bg-slate-50 transition" data-cat="${p.category_id}" data-low="${isLow}" data-out="${isOut}">
@@ -113,7 +122,7 @@ export const ProductosView = {
                       <td class="py-3 px-3 text-right text-slate-500">${Formatter.percent(p.markup_pct)}</td>
                       <td class="py-3 px-3 text-center">
                         <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${isOut ? 'bg-rose-100 text-rose-800' : isLow ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
-                          ${p.current_stock} ${escapeProductText(p.sale_unit)}
+                          ${shownStock} ${escapeProductText(p.sale_unit)}
                         </span>
                       </td>
                       <td class="py-3 px-3 text-slate-500 text-[11px]">${escapeProductText(p.warehouse_location || '-')}</td>
@@ -387,7 +396,7 @@ export const ProductosView = {
 
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <div class="text-xs text-slate-500 font-medium">Stock Actual</div>
-            <div class="text-lg font-bold text-slate-800 mt-1">${product.current_stock} ${escapeProductText(product.sale_unit)}</div>
+            <div class="text-lg font-bold text-slate-800 mt-1">${bundleStock(product)} ${escapeProductText(product.sale_unit)}</div>
             <div class="text-[11px] text-slate-500">Mín: ${product.min_stock} | Máx: ${product.max_stock}</div>
           </div>
 
