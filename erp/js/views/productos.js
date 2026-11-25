@@ -2,7 +2,7 @@
 // CRUD completo, conversiones de unidades, costos Caviahue, márgenes vs markup e historial.
 
 import { db } from '../db.js';
-import { editCentralProduct, readCentral } from '../supabase_erp_adapter.js?v=product-edit-1';
+import { editCentralProduct, readCentral, saveCentralProductForm } from '../supabase_erp_adapter.js?v=product-supplier-1';
 import { Formatter, PricingCalculator } from '../models.js';
 import { staycleanPublicCatalog } from '../supabase_public.js';
 
@@ -215,9 +215,16 @@ export const ProductosView = {
                 <select name="supplier_id" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
                   <option value="">Sin proveedor asignado</option>
                   ${suppliers.map(s => `
-                    <option value="${s.id}" ${product && (product.preferred_supplier_id ?? product.supplier_id) === s.id ? 'selected' : ''}>${s.name}</option>
+                    <option value="${s.id}" ${product && (product.preferred_supplier_id ?? product.supplier_id) === s.id ? 'selected' : ''}>${escapeProductText(s.name)}</option>
                   `).join('')}
+                  ${window.app.centralReadOnly ? '<option value="__new_supplier__">+ Crear nuevo proveedor</option>' : ''}
                 </select>
+                <fieldset id="newSupplierFields" hidden disabled class="mt-3 space-y-2 rounded-lg border border-slate-200 p-3">
+                  <label class="block">Nombre del proveedor *<input name="new_supplier_name" required maxlength="200" class="mt-1 w-full border rounded-lg p-2"></label>
+                  <label class="block">CUIT (opcional)<input name="new_supplier_cuit" inputmode="numeric" class="mt-1 w-full border rounded-lg p-2"></label>
+                  <label class="block">Teléfono (opcional)<input name="new_supplier_phone" type="tel" class="mt-1 w-full border rounded-lg p-2"></label>
+                  <label class="block">Correo (opcional)<input name="new_supplier_email" type="email" class="mt-1 w-full border rounded-lg p-2"></label>
+                </fieldset>
               </div>
             </div>
 
@@ -347,6 +354,15 @@ export const ProductosView = {
     if (window.lucide) window.lucide.createIcons();
     const form = container.querySelector("#productForm");
     form.initialValues = new FormData(form);
+    const supplierSelect = form.elements.supplier_id;
+    const newFields = form.querySelector('#newSupplierFields');
+    const syncSupplier = () => {
+      const creating = supplierSelect.value === '__new_supplier__';
+      newFields.hidden = !creating;
+      newFields.disabled = !creating;
+    };
+    supplierSelect.addEventListener('change', syncSupplier);
+    syncSupplier();
     this.attachFormListeners();
   },
 
@@ -607,20 +623,27 @@ window.productosModule = {
     };
 
     if (window.app.centralReadOnly) {
-      const product = db.getProduct(editId);
-      if (!product) return;
-      const changes = Object.fromEntries(Object.entries(data).filter(([key]) =>
+      const product = editId ? db.getProduct(editId) : null;
+      if (editId && !product) return;
+      const newSupplier = data.supplier_id === '__new_supplier__' ? {
+        name: formData.get('new_supplier_name')?.trim(),
+        cuit: formData.get('new_supplier_cuit')?.trim(),
+        phone: formData.get('new_supplier_phone')?.trim(),
+        email: formData.get('new_supplier_email')?.trim()
+      } : null;
+      if (newSupplier && !newSupplier.name) { alert('Ingresá el nombre del proveedor'); return; }
+      const changes = product ? Object.fromEntries(Object.entries(data).filter(([key]) =>
         formData.get(key) !== form.initialValues.get(key)
-      ));
+      )) : {...data};
       if ('supplier_id' in changes) {
-        changes.preferred_supplier_id = changes.supplier_id || null;
+        changes.preferred_supplier_id = newSupplier ? null : changes.supplier_id || null;
         delete changes.supplier_id;
       }
       if ('category_id' in changes) changes.category_id ||= null;
       for (const key of ['min_stock', 'max_stock', 'target_margin']) {
         if (key in changes) changes[key] = Number(formData.get(key));
       }
-      if (!Object.keys(changes).length) {
+      if (!Object.keys(changes).length && !newSupplier) {
         window.app.navigate('productos');
         return;
       }
@@ -628,8 +651,12 @@ window.productosModule = {
       if (submit.disabled) return;
       submit.disabled = true;
       try {
-        const updated = await editCentralProduct(editId, changes, product.current_stock);
-        db.centralSetTable('products', db.getProducts().map(row => row.id === updated.id ? updated : row));
+        const result = (!product || newSupplier)
+          ? await saveCentralProductForm(editId, changes, newSupplier, product?.current_stock ?? 0, crypto.randomUUID())
+          : {product: await editCentralProduct(editId, changes, product.current_stock)};
+        const updated = result.product;
+        db.centralSetTable('products', [...db.getProducts().filter(row=>row.id!==updated.id), updated]);
+        if (result.supplier) db.centralSetTable('suppliers', [...db.getSuppliers().filter(row=>row.id!==result.supplier.id), result.supplier]);
         if ('current_stock' in changes) {
           try {
             db.centralSetTable('inventory_movements', await readCentral('inventory_movements', { order: 'id.asc', limit: 10000 }));

@@ -131,3 +131,15 @@ export async function receiveCentralPurchase(purchase, requestId=crypto.randomUU
   if(!response.ok) throw new Error(data.message||'No se pudo recibir la compra');
   return data;
 }
+
+export async function saveCentralProductForm(productId, changes, newSupplier, expectedStock, requestId) {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error('Volvé a iniciar sesión en CleanSur');
+  const response = await fetch(`${STAYCLEAN_SUPABASE_URL}/rest/v1/rpc/stayclean_staff_save_product_form`, {
+    method:'POST', headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({p_product_id:productId||null,p_changes:changes,p_new_supplier:newSupplier,p_expected_stock:expectedStock,p_request_id:requestId})
+  });
+  const data=await response.json().catch(()=>({}));
+  if (!response.ok) throw new Error(data.message || 'No se pudo guardar el producto y proveedor');
+  return data;
+}
