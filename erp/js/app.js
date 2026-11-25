@@ -24,7 +24,7 @@ import { ConfiguracionView } from './views/configuracion.js?v=6.0';
 import { UsuariosView } from './views/usuarios.js?v=6.1';
 import { OcrFacturasView } from './views/ocr_facturas.js?v=10.6';
 import { CajaView } from './views/caja.js?v=6.1';
-import { ArcaView } from './views/arca.js?v=6.0';
+import { ArcaView } from './views/arca.js?v=arca-live-1';
 import { TiendaView } from './views/tienda.js?v=promo-stock-1';
 
 let deferredPrompt = null;
