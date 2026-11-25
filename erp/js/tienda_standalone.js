@@ -83,6 +83,37 @@ class TiendaStandaloneApp {
     content.classList.add('whitespace-pre-line');
   }
 
+  showTransferDetails(order, total) {
+    const content = this.showStoreDialog('Datos para transferir');
+    const amount = total == null ? NaN : Number(total);
+    content.innerHTML = `
+      <p class="font-bold text-[#0E3A6B]">Pedido ${escapeCatalogText(order)}</p>
+      <div class="rounded-xl bg-sky-50 p-4">
+        <p class="text-sm font-semibold">Importe a transferir</p>
+        <p class="text-2xl font-bold text-[#0E3A6B]">${Number.isFinite(amount) ? Formatter.money(amount) : 'Consultá el total en el comprobante'}</p>
+      </div>
+      <dl class="space-y-3">
+        <div><dt class="text-xs text-slate-500">Titular</dt><dd class="font-semibold">Federico Eumann</dd></div>
+        <div><dt class="text-xs text-slate-500">Billetera</dt><dd class="font-semibold">Mercado Pago</dd></div>
+        <div><dt class="text-xs text-slate-500">Alias</dt><dd class="flex flex-wrap items-center justify-between gap-2"><span class="font-mono select-all">cleansurcvh</span><button type="button" data-copy-transfer="cleansurcvh" class="rounded-lg border px-3 py-2 font-semibold">Copiar alias</button></dd></div>
+        <div><dt class="text-xs text-slate-500">CVU</dt><dd class="flex flex-wrap items-center justify-between gap-2"><span class="font-mono select-all break-all">0000003100075971427558</span><button type="button" data-copy-transfer="0000003100075971427558" class="rounded-lg border px-3 py-2 font-semibold">Copiar CVU</button></dd></div>
+      </dl>
+      <p data-transfer-status role="status" aria-live="polite" class="text-sm text-slate-600"></p>
+      <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Tu pedido está registrado. El pago queda pendiente de acreditación hasta que CleanSur verifique la transferencia.</p>
+      <form method="dialog"><button class="btn-stayclean w-full rounded-xl py-3 font-bold">Listo</button></form>`;
+    for (const button of content.querySelectorAll('[data-copy-transfer]')) {
+      button.onclick = async () => {
+        const status = content.querySelector('[data-transfer-status]');
+        try {
+          await navigator.clipboard.writeText(button.dataset.copyTransfer);
+          status.textContent = 'Copiado al portapapeles.';
+        } catch {
+          status.textContent = 'Mantené presionado el dato para copiarlo manualmente.';
+        }
+      };
+    }
+  }
+
   confirmTestPayment() {
     const content = this.showStoreDialog('Continuar a Mercado Pago');
     content.innerHTML = `
@@ -1157,7 +1188,8 @@ class TiendaStandaloneApp {
       sessionStorage.removeItem('stayclean_pending_order_id');
       modal.remove();
       await this.loadProducts();
-      this.showNotice('Venta asistida registrada para '+c.name+'. Pedido '+result.order_number+'. Stock descontado.');
+      if (method === 'Transferencia Bancaria') this.showTransferDetails(result.order_number, result.total ?? total);
+      else this.showNotice('Venta asistida registrada para '+c.name+'. Pedido '+result.order_number+'. Stock descontado.');
     }catch(e){error.textContent='No se registró el pedido: '+e.message+'. El carrito permanece intacto.';}
     finally{this.sendingOrder=false;if(button.isConnected)button.disabled=false;}
   }
@@ -1294,7 +1326,7 @@ class TiendaStandaloneApp {
           <select id="checkoutPaymentMethod" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#2b5158] outline-none">
             <option value="Mercado Pago" disabled>Mercado Pago — No disponible</option>
             <option value="Efectivo contra entrega" selected>Efectivo contra entrega en Caviahue</option>
-            <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CBU)</option>
+            <option value="Transferencia Bancaria">Transferencia Bancaria (Alias / CVU)</option>
             <option value="Cuenta Corriente" ${prof.creditAccountEnabled ? '' : 'disabled'}>${prof.creditAccountEnabled ? 'Cuenta Corriente Comercial' : 'Cuenta Corriente — No disponible'}</option>
           </select>
         </div>
@@ -1345,7 +1377,16 @@ class TiendaStandaloneApp {
       sessionStorage.removeItem('stayclean_pending_order_id');
       this.closeOrderConfirmation();
       await this.loadProducts();
-      this.showNotice(`Pedido ${savedOrder.order_number} registrado en CleanSur. Podés ver el comprobante en Mi cuenta → Mis pedidos.`);
+      if (paymentMethod === 'Transferencia Bancaria') {
+        let total = savedOrder.total;
+        if (total == null) {
+          try {
+            const orders = await staycleanCustomerOrders();
+            total = orders.find(order => order.number === savedOrder.order_number)?.total;
+          } catch (error) { console.warn('No se pudo consultar el total del pedido', error); }
+        }
+        this.showTransferDetails(savedOrder.order_number, total);
+      } else this.showNotice(`Pedido ${savedOrder.order_number} registrado en CleanSur. Podés ver el comprobante en Mi cuenta → Mis pedidos.`);
     } catch (error) {
       console.error('Error registrando pedido en Supabase', error);
       this.showNotice('No se registró el pedido: ' + error.message + '. El carrito permanece intacto.');
