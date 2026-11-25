@@ -631,7 +631,8 @@ class TiendaStandaloneApp {
   // ==========================================
   // MODAL VISTA RÁPIDA / OPCIONES
   // ==========================================
-  openProductModal(productId) {
+  async openProductModal(productId) {
+    if (!this.catalogAromas.size) await this.loadAromaFilter();
     const p = this.products.find(item => item.id === productId);
     if (!p) return;
 
@@ -639,7 +640,8 @@ class TiendaStandaloneApp {
     const content = document.getElementById('productDetailContent');
     if (!modal || !content) return;
 
-    const inCart = this.cart.find(item => item.id === p.id)?.quantity ?? 0;
+    const inCart = this.cart.filter(item => item.id === p.id).reduce((sum,item)=>sum+item.quantity,0);
+    const aromas = [...(this.catalogAromas.get(p.id) || [])];
     const available = p.in_stock ? Math.max(0, Math.floor(Number(p.current_stock) || 0) - inCart) : 0;
 
     content.innerHTML = `
@@ -684,6 +686,7 @@ class TiendaStandaloneApp {
 
         <div class="space-y-3 border-t border-slate-100 pt-4">
           ${available > 0 ? `
+            ${aromas.length ? `<label class="block font-semibold text-slate-700">Aroma<select id="modalProductAroma" required class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3"><option value="">Seleccioná un aroma</option>${aromas.map(aroma=>`<option value="${escapeCatalogText(aroma)}">${escapeCatalogText(aroma.toLocaleUpperCase('es-AR'))}</option>`).join('')}</select></label>` : ''}
             <div class="flex items-center justify-between gap-3">
               <label for="modalProductQty" class="text-sm font-semibold text-slate-700">Cantidad a agregar</label>
               <div class="flex items-center rounded-lg border border-slate-300 bg-slate-50">
@@ -722,7 +725,9 @@ class TiendaStandaloneApp {
   addFromModal(productId, checkout = false) {
     const input = document.getElementById('modalProductQty');
     if (!input || !input.reportValidity()) return;
-    if (!this.addToCart(productId, input.valueAsNumber)) return;
+    const aroma = document.getElementById('modalProductAroma');
+    if (aroma && !aroma.reportValidity()) return;
+    if (!this.addToCart(productId, input.valueAsNumber, aroma?.value || '')) return;
     this.closeProductModal();
     if (checkout) return this.proceedToCheckout();
   }
@@ -735,12 +740,13 @@ class TiendaStandaloneApp {
   // ==========================================
   // CARRITO DE COMPRAS (DRAWER SLIDE-OVER)
   // ==========================================
-  addToCart(productId, qty = 1) {
+  addToCart(productId, qty = 1, aroma = '') {
     const p = this.products.find(item => item.id === productId);
     if (!p || !p.in_stock) return;
 
-    const existing = this.cart.find(item => item.id === productId);
-    if (!Number.isInteger(qty) || qty < 1 || qty + (existing?.quantity ?? 0) > Number(p.current_stock)) {
+    const existing = this.cart.find(item => item.id === productId && (item.aroma || '') === aroma);
+    const totalInCart = this.cart.filter(item=>item.id===productId).reduce((sum,item)=>sum+item.quantity,0);
+    if (!Number.isInteger(qty) || qty < 1 || qty + totalInCart > Number(p.current_stock)) {
       this.showNotice('Revisá la cantidad disponible para este producto.');
       return false;
     }
@@ -749,6 +755,7 @@ class TiendaStandaloneApp {
     } else {
       this.cart.push({
         id: p.id,
+        aroma,
         name: p.name,
         price: p.sale_price,
         presentation: p.presentation || p.sale_unit,
@@ -762,20 +769,21 @@ class TiendaStandaloneApp {
     return true;
   }
 
-  updateCartQty(productId, delta) {
-    const item = this.cart.find(i => i.id === productId);
+  updateCartQty(index, delta) {
+    const item = this.cart[index];
     if (!item) return;
 
+    const product = this.products.find(p=>p.id===item.id);
+    const total = this.cart.filter(i=>i.id===item.id).reduce((sum,i)=>sum+i.quantity,0);
+    if (delta > 0 && (!product || total+delta>product.current_stock)) return;
     item.quantity += delta;
-    if (item.quantity <= 0) {
-      this.cart = this.cart.filter(i => i.id !== productId);
-    }
+    if (item.quantity <= 0) this.cart.splice(index,1);
     this.saveCart();
     this.renderCartItems();
   }
 
-  removeFromCart(productId) {
-    this.cart = this.cart.filter(i => i.id !== productId);
+  removeFromCart(index) {
+    this.cart.splice(index,1);
     this.saveCart();
     this.renderCartItems();
   }
@@ -832,12 +840,12 @@ class TiendaStandaloneApp {
       return;
     }
 
-    container.innerHTML = this.cart.map(item => `
+    container.innerHTML = this.cart.map((item,index) => `
       <div class="py-3 flex items-center gap-3">
-        <img src="${item.img_url}" alt="${escapeCatalogText(item.name)}" class="w-14 h-14 object-contain rounded-lg bg-slate-50 border border-slate-100 p-1 shrink-0">
+        <img src="${item.img_url}" alt="${escapeCatalogText(item.name + (item.aroma ? ' · ' + item.aroma : ''))}" class="w-14 h-14 object-contain rounded-lg bg-slate-50 border border-slate-100 p-1 shrink-0">
         
         <div class="flex-1 min-w-0">
-          <h4 class="text-xs font-bold text-slate-800 truncate">${escapeCatalogText(item.name)}</h4>
+          <h4 class="text-xs font-bold text-slate-800 truncate">${escapeCatalogText(item.name + (item.aroma ? ' · ' + item.aroma : ''))}</h4>
           <p class="text-[10px] text-slate-400 truncate">${escapeCatalogText(item.presentation || '')}</p>
           <span class="text-xs font-extrabold text-[#1f4e5b] block mt-0.5">
             ${Formatter.money(item.price)}
@@ -846,11 +854,11 @@ class TiendaStandaloneApp {
 
         <div class="flex items-center gap-2 shrink-0">
           <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white text-xs">
-            <button onclick="window.tiendaApp.updateCartQty('${item.id}', -1)" class="px-2 py-1 text-slate-600 hover:bg-slate-100 font-bold">-</button>
+            <button onclick="window.tiendaApp.updateCartQty(${index}, -1)" class="px-2 py-1 text-slate-600 hover:bg-slate-100 font-bold">-</button>
             <span class="px-2 py-1 font-bold text-slate-800">${item.quantity}</span>
-            <button onclick="window.tiendaApp.updateCartQty('${item.id}', 1)" class="px-2 py-1 text-slate-600 hover:bg-slate-100 font-bold">+</button>
+            <button onclick="window.tiendaApp.updateCartQty(${index}, 1)" class="px-2 py-1 text-slate-600 hover:bg-slate-100 font-bold">+</button>
           </div>
-          <button onclick="window.tiendaApp.removeFromCart('${item.id}')" class="p-1 text-slate-300 hover:text-rose-500 rounded transition" title="Eliminar">
+          <button onclick="window.tiendaApp.removeFromCart(${index})" class="p-1 text-slate-300 hover:text-rose-500 rounded transition" title="Eliminar">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
         </div>
@@ -968,7 +976,7 @@ class TiendaStandaloneApp {
       sessionStorage.setItem('stayclean_pending_order_id', requestId);
       const response=await fetch(STAYCLEAN_SUPABASE_URL+'/functions/v1/create-mp-checkout',{
         method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},
-        body:JSON.stringify({request_id:requestId,items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity}))})
+        body:JSON.stringify({request_id:requestId,items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity,aroma:item.aroma || null}))})
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw Error(data.error||data.detail||'Mercado Pago no pudo iniciar el pago');
@@ -1141,7 +1149,7 @@ class TiendaStandaloneApp {
         request_id:requestId,customer_id:c.id,customer_name:c.name,customer_phone:c.phone,
         customer_email:c.email||'',delivery_address:c.address,delivery_city:c.city,
         payment_method:method,expected_cost_total:total,
-        items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity}))
+        items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity,aroma:item.aroma || null}))
       }});
       this.cart=[];
       this.saveCart();
@@ -1270,7 +1278,7 @@ class TiendaStandaloneApp {
             ${this.cart.map(item => `
               <div class="py-1.5 flex justify-between items-center text-[11px]">
                 <div class="truncate max-w-[240px]">
-                  <strong>${item.quantity}x</strong> ${escapeCatalogText(item.name)}
+                  <strong>${item.quantity}x</strong> ${escapeCatalogText(item.name + (item.aroma ? ' · ' + item.aroma : ''))}
                 </div>
                 <div class="font-mono text-slate-800 shrink-0">
                   ${Formatter.money(unitPrice(item) * item.quantity)}
@@ -1329,7 +1337,7 @@ class TiendaStandaloneApp {
         delivery_city: city,
         payment_method: paymentMethod,
         expected_cost_total: this.expectedCostTotal,
-        items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+        items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity, aroma: item.aroma || null }))
       });
       this.cart = [];
       this.saveCart();

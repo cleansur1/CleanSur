@@ -520,7 +520,7 @@ function bootCentralReadOnly() {
       document.body.append(exit);
       // Bloqueo de controles de escritura: navegación permitida, formularios y acciones no.
       document.addEventListener('click', e => {
-        if (e.target.closest('dialog form[method=dialog]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu, #new-orders-alert, #order-push-settings')) return;
+        if (e.target.closest('dialog form[method=dialog], [data-cs-modal-close]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu, #new-orders-alert, #order-push-settings')) return;
         const control = e.target.closest('button, input[type=submit], a[onclick], [role=button]');
         if (control) {
           const handler = control.getAttribute('onclick') || '';
