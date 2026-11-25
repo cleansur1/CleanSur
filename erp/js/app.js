@@ -27,8 +27,6 @@ import { CajaView } from './views/caja.js?v=6.1';
 import { ArcaView } from './views/arca.js?v=arca-live-1';
 import { TiendaView } from './views/tienda.js?v=promo-stock-1';
 
-let deferredPrompt = null;
-
 class App {
   constructor() {
     this.currentRoute = 'dashboard';
@@ -70,7 +68,6 @@ class App {
 
     this.setupNavigation();
     this.setupGlobalSearch();
-    this.setupPWA();
     this.updateUserHeader();
     this.applyRolePermissions();
     this.navigate('dashboard');
@@ -332,31 +329,7 @@ class App {
     if (modal) modal.classList.add('hidden');
   }
 
-  setupPWA() {
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      const btn = document.getElementById('btnInstallPWA');
-      if (btn) btn.classList.remove('hidden');
-    });
 
-    const installBtn = document.getElementById('btnInstallPWA');
-    if (installBtn) {
-      installBtn.addEventListener('click', async () => {
-        if (!deferredPrompt) {
-          alert('Para instalar en PC o celular, seleccioná "Instalar aplicación" o "Agregar a pantalla principal" desde el menú del navegador.');
-          return;
-        }
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          installBtn.classList.add('hidden');
-        }
-        deferredPrompt = null;
-      });
-    }
-
-  }
 }
 
 export const app = new App();
@@ -520,7 +493,7 @@ function bootCentralReadOnly() {
       document.body.append(exit);
       // Bloqueo de controles de escritura: navegación permitida, formularios y acciones no.
       document.addEventListener('click', e => {
-        if (e.target.closest('dialog form[method=dialog], [data-cs-modal-close]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu, #new-orders-alert, #order-push-settings')) return;
+        if (e.target.closest('dialog form[method=dialog], [data-cs-modal-close]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu, #btnInstallPWA, #new-orders-alert, #order-push-settings')) return;
         const control = e.target.closest('button, input[type=submit], a[onclick], [role=button]');
         if (control) {
           const handler = control.getAttribute('onclick') || '';

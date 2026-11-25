@@ -6,7 +6,8 @@
   <title>CleanSur ERP - Distribuidora Limpieza y Descartables</title>
   
   <!-- PWA & Mobile Web App Meta -->
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json?v=install-2">
+  <script src="js/install-pwa.js?v=2"></script>
   <meta name="theme-color" content="#0E3A6B">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -295,7 +296,7 @@
 
     <!-- Sidebar Footer con Localidad & PWA Install -->
     <div class="p-3.5 border-t border-slate-800/80 bg-slate-950/40 text-[11px] space-y-2">
-      <button id="btnInstallPWA" class="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition">
+      <button id="btnInstallPWA" type="button" class="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition">
         <i data-lucide="download-cloud" class="w-4 h-4"></i>
         <span>Instalar App en este Dispositivo</span>
       </button>
@@ -434,7 +435,7 @@
     });
   </script>
   <!-- Script Principal de la Aplicación -->
-  <script type="module" src="js/app.js?v=modal-aroma-1"></script>
+  <script type="module" src="js/app.js?v=pwa-install-2"></script>
 <script src="js/modal-close.js?v=1"></script>
 </body>
 </html>
