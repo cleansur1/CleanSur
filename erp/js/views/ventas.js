@@ -1,3 +1,4 @@
+import { markOrderReviewed } from '../order_alerts.js';
 import { bindArchive, isCancelled } from './archive.js?v=2';
 import { statusColor } from './status_badge.js';
 // Módulo de Ventas / POS para Limpieza Caviahue
@@ -66,7 +67,12 @@ export const VentasView = {
                     ${item.unit_price == null ? '' : ' · ' + Formatter.money(Number(item.unit_price)) + ' por unidad'}</li>`).join('')}</ul>
                 <strong>Total ${Formatter.money(Number(row.total))}</strong>
                 ${row.fiscal_reference ? '<p>Referencia ARCA: ' + esc(row.fiscal_reference) + '</p>' : ''}`;
-              await salesDialog('Comprobante ' + row.number, detail);
+              const opened = salesDialog('Comprobante ' + row.number, detail);
+              if (row.channel === 'Tienda online') {
+                markOrderReviewed(row.number).catch(() =>
+                  window.app.showNotification('No se pudo marcar el pedido como revisado.', 'error'));
+              }
+              await opened;
               return;
             }
             const methods = ['Efectivo contra entrega','Transferencia Bancaria','Cuenta Corriente','Mercado Pago'];

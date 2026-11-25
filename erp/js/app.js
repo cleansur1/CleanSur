@@ -1,9 +1,12 @@
 // Controlador Principal & Router para Limpieza Caviahue ERP v6.0
+import { orderAlertRequest, setupOrderPush, stopOrderPush, markOrderReviewed } from './order_alerts.js';
+import { salesDialog } from './views/sales_dialog.js';
+import { Formatter } from './models.js';
 import { db } from './db.js';
 import { signInAdmin, signOutAdmin, restoreAdminSession, refreshAdminSession } from './supabase_admin.js';
-import { readCentral, readCentralDashboard, countNewStoreOrders, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
+import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
 import { DashboardView } from './views/dashboard.js?v=dashboard-clean-1';
-import { VentasView } from './views/ventas.js?v=archive-controls-2';
+import { VentasView } from './views/ventas.js?v=order-push-1';
 import { ComprasView } from './views/compras.js?v=aromas-session-2';
 import { ProductosView } from './views/productos.js?v=7.1';
 import { StockView } from './views/stock.js?v=6.0';
@@ -353,15 +356,6 @@ class App {
       });
     }
 
-    // Desregistrar cualquier Service Worker viejo para evitar que sirva versiones en caché
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(r => r.unregister());
-      });
-      if ('caches' in window) {
-        caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
-      }
-    }
   }
 }
 
@@ -378,8 +372,8 @@ async function startOrderAlerts() {
     if (document.hidden || loading) return;
     loading = true;
     try {
-      const count = await countNewStoreOrders();
-      const label = count === 1 ? '1 pedido nuevo' : `${count} pedidos nuevos`;
+      const count = await orderAlertRequest('rpc/cleansur_count_unreviewed_orders', {});
+      const label = count === 1 ? '1 pedido sin revisar' : `${count} pedidos sin revisar`;
       badge.hidden = count === 0;
       badge.textContent = count > 99 ? '99+' : String(count);
       button.setAttribute('aria-label', label);
@@ -406,8 +400,42 @@ async function startOrderAlerts() {
   };
   document.addEventListener('visibilitychange', refresh);
   window.addEventListener('online', refresh);
+  window.addEventListener('cleansur-order-reviewed', refresh);
   window.setInterval(refresh, 20_000);
   refresh();
+}
+
+async function openLinkedOrder() {
+  const url = new URL(location.href);
+  const id = url.searchParams.get('pedido');
+  if (!id) return;
+  try {
+    const fields = 'id,order_number,customer_name,status,payment_method,items,total';
+    const params = new URLSearchParams({ id: 'eq.' + id, select: fields, limit: '1' });
+    const [order] = await orderAlertRequest('orders?' + params);
+    if (!order) throw new Error('El pedido ya no está disponible.');
+    app.navigate('ventas', { action: 'online' });
+    const detail = document.createElement('div');
+    const summary = document.createElement('p');
+    summary.textContent = [order.customer_name, order.status, order.payment_method].filter(Boolean).join(' · ');
+    const items = document.createElement('ul');
+    items.className = 'my-3 space-y-1 border-y py-3';
+    for (const item of Array.isArray(order.items) ? order.items : []) {
+      const line = document.createElement('li');
+      line.textContent = item.quantity + ' × ' + (item.product_name || item.name || item.product_id);
+      items.append(line);
+    }
+    const total = document.createElement('strong');
+    total.textContent = 'Total ' + Formatter.money(Number(order.total));
+    detail.append(summary, items, total);
+    const opened = salesDialog('Pedido ' + order.order_number, detail);
+    markOrderReviewed(order.order_number).catch(() => app.showNotification('No se pudo marcar el pedido como revisado.', 'error'));
+    url.searchParams.delete('pedido');
+    history.replaceState(null, '', url);
+    await opened;
+  } catch (error) {
+    app.showNotification(error.message, 'error');
+  }
 }
 
 function bootCentralReadOnly() {
@@ -480,17 +508,19 @@ function bootCentralReadOnly() {
       shield.remove();
       app.init();
       startOrderAlerts();
+      void setupOrderPush(app.showNotification.bind(app));
+      void openLinkedOrder();
       // Acceso central: sin zócalo de diagnóstico. Mantener cierre de sesión accesible.
       const exit = document.createElement('button');
       exit.type = 'button';
       exit.textContent = 'Cerrar sesión';
       exit.setAttribute('aria-label', 'Cerrar sesión de CleanSur');
       exit.style.cssText = 'position:fixed;top:72px;right:16px;z-index:9000;background:white;color:#0e3a6b;border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font:600 12px system-ui;box-shadow:0 2px 8px #0001';
-      exit.onclick = async () => { await signOutAdmin(); location.reload(); };
+      exit.onclick = async () => { await stopOrderPush().catch(() => {}); await signOutAdmin(); location.reload(); };
       document.body.append(exit);
       // Bloqueo de controles de escritura: navegación permitida, formularios y acciones no.
       document.addEventListener('click', e => {
-        if (e.target.closest('dialog form[method=dialog]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu, #new-orders-alert')) return;
+        if (e.target.closest('dialog form[method=dialog]') || e.target.closest('#central-access') || e.target === exit || e.target.closest('.nav-link, #btnMobileMenu, #btnCloseMobileMenu, #new-orders-alert, #order-push-settings')) return;
         const control = e.target.closest('button, input[type=submit], a[onclick], [role=button]');
         if (control) {
           const handler = control.getAttribute('onclick') || '';
