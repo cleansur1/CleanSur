@@ -476,10 +476,27 @@ export const ComprasView = {
             <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <div class="flex items-center justify-between mb-2">
                 <label class="block text-xs font-bold text-slate-700">Agregar Productos a la Factura</label>
-                <button onclick="window.app.navigate('productos', { action: 'new' })" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
+                <button type="button" onclick="document.getElementById('purchaseNewProduct').showModal()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
                   + Crear Producto si no existe
                 </button>
               </div>
+
+              <dialog id="purchaseNewProduct" class="w-[calc(100%-2rem)] max-w-lg rounded-xl p-5 backdrop:bg-slate-900/50">
+                <form id="purchaseNewProductForm" class="space-y-3">
+                  <h2 class="text-lg font-bold">Cargar producto en la factura</h2>
+                  <label class="block">Código / SKU<input name="sku" required maxlength="100" class="block w-full rounded border p-2"></label>
+                  <label class="block">Nombre<input name="name" required maxlength="150" class="block w-full rounded border p-2"></label>
+                  <label class="block">Unidad base<input name="base_unit" required value="unidad" class="block w-full rounded border p-2"></label>
+                  <label class="block">Unidades base por unidad de compra<input name="factor" type="number" min="1" step="1" required value="1" class="block w-full rounded border p-2"></label>
+                  <label class="block">Precio por unidad de compra<input name="cost" type="number" min="0" step="0.01" required class="block w-full rounded border p-2"></label>
+                  <p class="text-sm text-slate-600">Si el código ya existe, se agregará el producto existente. El stock se registra al confirmar la factura.</p>
+                  <p data-error role="alert" class="text-sm text-rose-700"></p>
+                  <div class="flex justify-end gap-3">
+                    <button type="button" data-close class="rounded border px-3 py-2">Cancelar</button>
+                    <button type="submit" class="rounded bg-blue-700 px-3 py-2 font-semibold text-white">Cargar producto</button>
+                  </div>
+                </form>
+              </dialog>
 
               <div class="relative mb-3">
                 <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
@@ -583,6 +600,7 @@ export const ComprasView = {
 
     if (window.lucide) window.lucide.createIcons();
     this.attachNewPurchaseEvents(products, suppliers);
+    this.bindNewPurchaseProduct(container, products);
     if (window.app.centralReadOnly) {
       const search = container.querySelector('#purchaseProductSearch');
       try {
@@ -599,6 +617,68 @@ export const ComprasView = {
         }
       }
     }
+  },
+
+  bindNewPurchaseProduct(container, products) {
+    const dialog = container.querySelector('#purchaseNewProduct');
+    const form = dialog.querySelector('form');
+    const submit = form.querySelector('[type="submit"]');
+    const error = form.querySelector('[data-error]');
+    const close = form.querySelector('[data-close]');
+    close.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('cancel', event => {
+      if (submit.disabled) event.preventDefault();
+    });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (submit.disabled) return;
+      submit.disabled = close.disabled = true;
+      error.textContent = '';
+      try {
+        const data = new FormData(form);
+        const sku = data.get('sku').trim();
+        const name = data.get('name').trim();
+        const unit = data.get('base_unit').trim();
+        const factor = Number(data.get('factor'));
+        const cost = Number(data.get('cost'));
+        if (!sku || !name || !unit) throw Error('Completá el código, el nombre y la unidad base.');
+        const matches = db.getProducts().filter(product => [product.sku, product.barcode]
+          .some(code => String(code ?? '').trim().toLowerCase() === sku.toLowerCase()));
+        if (matches.length > 1) throw Error('El código coincide con varios productos. Buscá el correcto por nombre.');
+        let product = matches[0];
+        if (product?.active === false) throw Error('El producto ya existe y está inactivo. Reactivalo desde Productos.');
+        if (product && purchaseItems.some(item => item.product_id === product.id && !item.presentation_id)) {
+          throw Error('El producto ya está en la factura. Editá su cantidad y costo en el renglón.');
+        }
+        if (!product) {
+          const changes = {
+            sku, name, sale_unit: unit, purchase_unit: factor === 1 ? unit : 'Embalaje',
+            conversion_factor: factor, current_stock: 0, publish_online: false,
+            preferred_supplier_id: container.querySelector('#purchaseSupplierSelect').value || null
+          };
+          if (window.app.centralReadOnly) {
+            const result = await this.callPurchaseRpc('stayclean_staff_save_product_form', {
+              p_product_id: null, p_changes: changes, p_new_supplier: null,
+              p_expected_stock: 0, p_request_id: crypto.randomUUID()
+            });
+            product = result.product;
+            if (!product?.id) throw Error('No se recibió la ficha del producto creado.');
+            db.centralSetTable('products', [...db.getProducts().filter(row => row.id !== product.id), product]);
+          } else {
+            db.saveProduct({...changes, base_unit: unit});
+            product = db.getProducts().find(row => row.sku === sku);
+          }
+          if (!products.some(row => row.id === product.id)) products.push(product);
+        }
+        this.addItem(product.id, '', cost, factor);
+        dialog.close();
+        form.reset();
+      } catch (failure) {
+        error.textContent = failure.message || 'No se pudo cargar el producto.';
+      } finally {
+        submit.disabled = close.disabled = false;
+      }
+    });
   },
 
   attachNewPurchaseEvents(products, suppliers) {
@@ -1206,7 +1286,7 @@ export const ComprasView = {
   // =========================================================================
   // MÉTODOS DE NUEVA COMPRA MANUAL
   // =========================================================================
-  addItem(productId, presentationId = '') {
+  addItem(productId, presentationId = '', invoiceCost = null, invoiceFactor = null) {
     const prod = db.getProduct(productId);
     if (!prod) return;
 
@@ -1221,9 +1301,9 @@ export const ComprasView = {
         product_name: presentation ? prod.name + ' · ' + presentation.name : prod.name,
         sku: presentation?.code || prod.sku,
         unit_name: presentation?.name || prod.purchase_unit || prod.sale_unit,
-        factor_to_base: presentation?.factor || prod.conversion_factor || 1,
+        factor_to_base: invoiceFactor ?? (presentation?.factor || prod.conversion_factor || 1),
         quantity: 1,
-        unit_invoice_cost: prod.purchase_cost || prod.caviahue_cost || 0,
+        unit_invoice_cost: invoiceCost ?? (prod.purchase_cost || prod.caviahue_cost || 0),
         allocated_logistics: 0,
         unit_caviahue_cost: prod.caviahue_cost || 0
       });
