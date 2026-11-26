@@ -396,7 +396,13 @@ export const ComprasView = {
   },
 
   async renderNewPurchase(container, suppliers, products) {
-    try { purchasePresentations=window.app.centralReadOnly ? await staffPresentations() : []; }
+    try {
+      if (window.app.centralReadOnly) {
+        const { refreshAdminSession } = await import('../supabase_admin.js');
+        await refreshAdminSession();
+      }
+      purchasePresentations = window.app.centralReadOnly ? await staffPresentations() : [];
+    }
     catch(error) { container.textContent=error.message; return; }
     if (window.app.currentRoute !== 'compras') return;
     purchaseItems = [];
@@ -565,6 +571,10 @@ export const ComprasView = {
                 Al confirmar la compra, el stock aumentará automáticamente en unidad base y se actualizará el historial de costos.
               </div>
 
+              ${window.app.centralReadOnly ? `<label class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs">
+                <input type="checkbox" id="purchaseStockAlreadyEntered" class="mt-0.5">
+                <span><strong>El stock de esta factura ya fue cargado</strong><br>Registrá el comprobante sin sumar existencias ni presentaciones cerradas.</span>
+              </label>` : ''}
               <button id="btnConfirmPurchase" onclick="window.comprasModule.confirmPurchase()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition flex items-center justify-center gap-2">
                 <i data-lucide="check-circle" class="w-5 h-5"></i>
                 Confirmar e Ingresar Stock
@@ -595,7 +605,7 @@ export const ComprasView = {
 
         const filtered = products.filter(p => 
           p.name.toLowerCase().includes(query) ||
-          p.sku.toLowerCase().includes(query)
+          String(p.sku ?? '').toLowerCase().includes(query)
         );
 
         if (filtered.length === 0) {
@@ -1227,8 +1237,9 @@ export const ComprasView = {
   },
 
   renderTable() {
-    const tbody = document.getElementById('purchaseItemsTable');
+    const tbody = document.getElementById('purchaseTableBody');
     if (!tbody) return;
+    document.getElementById('purchaseItemsCount').textContent = purchaseItems.length + ' ítems';
 
     if (purchaseItems.length === 0) {
       tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400">No hay productos agregados a la orden.</td></tr>`;
@@ -1276,9 +1287,9 @@ export const ComprasView = {
     const subtotal = purchaseItems.reduce((acc, it) => acc + (it.quantity * it.unit_invoice_cost), 0);
     const total = subtotal + logisticsTotal;
 
-    const elSub = document.getElementById('summarySubtotal');
-    const elLog = document.getElementById('summaryLogistics');
-    const elTot = document.getElementById('summaryTotal');
+    const elSub = document.getElementById('purchaseSubtotalMercaderia');
+    const elLog = document.getElementById('purchaseSummaryLogistics');
+    const elTot = document.getElementById('purchaseTotalFinal');
 
     if (elSub) elSub.textContent = Formatter.money(subtotal);
     if (elLog) elLog.textContent = Formatter.money(logisticsTotal);
@@ -1290,6 +1301,8 @@ export const ComprasView = {
       alert('Debés agregar al menos un producto a la compra.');
       return;
     }
+    const supplierId = document.getElementById('purchaseSupplierSelect')?.value;
+    const selectedSupplier = db.getSuppliers().find(supplier => supplier.id === supplierId);
     if (!selectedSupplier) {
       alert('Seleccioná el proveedor de la compra.');
       return;
@@ -1304,7 +1317,11 @@ export const ComprasView = {
       const button=document.getElementById('btnConfirmPurchase');
       if (button.disabled) return;
       button.disabled=true;
-      const payload={supplier_id:selectedSupplier.id,invoice_number:invNum,items:purchaseItems.map(item=>({
+      const payload={supplier_id:selectedSupplier.id,invoice_number:invNum,
+        date:document.getElementById('purchaseDate').value,
+        notes:document.getElementById('purchaseNotes').value,
+        stock_already_entered:document.getElementById('purchaseStockAlreadyEntered').checked,
+        items:purchaseItems.map(item=>({
         product_id:item.product_id,presentation_id:item.presentation_id,quantity:item.quantity,
         quantity_base:item.quantity*item.factor_to_base,
         unit_cost:item.presentation_id ? item.unit_invoice_cost : item.unit_invoice_cost/item.factor_to_base
@@ -1313,7 +1330,8 @@ export const ComprasView = {
       if (this.centralPurchaseSignature!==signature) { this.centralPurchaseSignature=signature; this.centralPurchaseRequest=crypto.randomUUID(); }
       try {
         if (logisticsTotal>0) throw Error('Registrá los gastos logísticos desde el circuito de factura OCR.');
-        await this.callPurchaseRpc('stayclean_staff_receive_purchase',{p_purchase:{...payload,request_id:this.centralPurchaseRequest}});
+        const result = await this.callPurchaseRpc('stayclean_staff_receive_purchase',{p_purchase:{...payload,request_id:this.centralPurchaseRequest}});
+        if (!result?.success) throw Error('Supabase no confirmó la compra.');
       } catch(error) { alert(error.message); button.disabled=false; return; }
       this.centralPurchaseSignature=null;
       await this.reloadAfterPurchaseChange();
@@ -1324,8 +1342,8 @@ export const ComprasView = {
         supplier_id: selectedSupplier.id,
         supplier_name: selectedSupplier.name,
         invoice_number: invNum,
-        date: document.getElementById('inputInvoiceDate')?.value || new Date().toISOString().substring(0, 10),
-        payment_condition: document.getElementById('inputPaymentCondition')?.value || 'Contado',
+        date: document.getElementById('purchaseDate')?.value || new Date().toISOString().substring(0, 10),
+        payment_condition: document.getElementById('purchasePaymentCondition')?.value || 'Contado',
         total_logistics: logisticsTotal,
         logistics_distribution_method: distributionMethod,
         items: purchaseItems.map(it => ({
