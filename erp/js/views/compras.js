@@ -1,3 +1,5 @@
+import { staffPresentations, presentationOptions } from '../presentations.js?v=1';
+let purchasePresentations=[];
 import { bindArchive, isCancelled } from './archive.js?v=2';
 import { statusColor } from './status_badge.js';
 import { db } from '../db.js';
@@ -393,7 +395,10 @@ export const ComprasView = {
     this.renderPurchasesList(document.getElementById('app-content'), db.getPurchases(), db.getSuppliers());
   },
 
-  renderNewPurchase(container, suppliers, products) {
+  async renderNewPurchase(container, suppliers, products) {
+    try { purchasePresentations=window.app.centralReadOnly ? await staffPresentations() : []; }
+    catch(error) { container.textContent=error.message; return; }
+    if (window.app.currentRoute !== 'compras') return;
     purchaseItems = [];
     logisticsTotal = 0;
     distributionMethod = 'VALOR';
@@ -599,12 +604,13 @@ export const ComprasView = {
         }
 
         resultsContainer.innerHTML = filtered.slice(0, 8).map(p => `
-          <div class="p-2 flex items-center justify-between hover:bg-blue-50/60 transition cursor-pointer" onclick="window.comprasModule.addItem('${p.id}')">
+          <div class="p-2 flex items-center justify-between hover:bg-blue-50/60 transition cursor-pointer"  >
             <div>
               <div class="text-xs font-bold text-slate-800">${p.name}</div>
               <div class="text-[11px] text-slate-500">${p.sku} • Unidad Compra: ${p.purchase_unit || p.sale_unit} (Factor: ${p.conversion_factor || 1})</div>
             </div>
-            <button class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold">
+            <select aria-label="Presentación" class="max-w-48 rounded border p-1">${presentationOptions(purchasePresentations,p.id)}</select>
+            <button type="button" data-purchase-line onclick="window.comprasModule.addItem('${p.id}', this.previousElementSibling.value)" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold">
               + Agregar
             </button>
           </div>
@@ -1170,20 +1176,22 @@ export const ComprasView = {
   // =========================================================================
   // MÉTODOS DE NUEVA COMPRA MANUAL
   // =========================================================================
-  addItem(productId) {
+  addItem(productId, presentationId = '') {
     const prod = db.getProduct(productId);
     if (!prod) return;
 
-    const existing = purchaseItems.find(it => it.product_id === productId);
+    const presentation=purchasePresentations.find(form=>form.id===presentationId && form.product_id===productId);
+    const existing = purchaseItems.find(it => it.product_id === productId && (it.presentation_id || '') === presentationId);
     if (existing) {
       existing.quantity += 1;
     } else {
       purchaseItems.push({
         product_id: prod.id,
-        product_name: prod.name,
-        sku: prod.sku,
-        unit_name: prod.purchase_unit || prod.sale_unit,
-        factor_to_base: prod.conversion_factor || 1,
+        presentation_id: presentationId || null,
+        product_name: presentation ? prod.name + ' · ' + presentation.name : prod.name,
+        sku: presentation?.code || prod.sku,
+        unit_name: presentation?.name || prod.purchase_unit || prod.sale_unit,
+        factor_to_base: presentation?.factor || prod.conversion_factor || 1,
         quantity: 1,
         unit_invoice_cost: prod.purchase_cost || prod.caviahue_cost || 0,
         allocated_logistics: 0,
@@ -1277,7 +1285,7 @@ export const ComprasView = {
     if (elTot) elTot.textContent = Formatter.money(total);
   },
 
-  confirmPurchase() {
+  async confirmPurchase() {
     if (purchaseItems.length === 0) {
       alert('Debés agregar al menos un producto a la compra.');
       return;
@@ -1286,12 +1294,31 @@ export const ComprasView = {
       alert('Seleccioná el proveedor de la compra.');
       return;
     }
-    const invNum = document.getElementById('inputInvoiceNumber')?.value.trim();
+    const invNum = document.getElementById('purchaseInvoiceNumber')?.value.trim();
     if (!invNum) {
       alert('Ingresá el número de factura o remito.');
       return;
     }
 
+    if (window.app.centralReadOnly) {
+      const button=document.getElementById('btnConfirmPurchase');
+      if (button.disabled) return;
+      button.disabled=true;
+      const payload={supplier_id:selectedSupplier.id,invoice_number:invNum,items:purchaseItems.map(item=>({
+        product_id:item.product_id,presentation_id:item.presentation_id,quantity:item.quantity,
+        quantity_base:item.quantity*item.factor_to_base,
+        unit_cost:item.presentation_id ? item.unit_invoice_cost : item.unit_invoice_cost/item.factor_to_base
+      }))};
+      const signature=JSON.stringify(payload);
+      if (this.centralPurchaseSignature!==signature) { this.centralPurchaseSignature=signature; this.centralPurchaseRequest=crypto.randomUUID(); }
+      try {
+        if (logisticsTotal>0) throw Error('Registrá los gastos logísticos desde el circuito de factura OCR.');
+        await this.callPurchaseRpc('stayclean_staff_receive_purchase',{p_purchase:{...payload,request_id:this.centralPurchaseRequest}});
+      } catch(error) { alert(error.message); button.disabled=false; return; }
+      this.centralPurchaseSignature=null;
+      await this.reloadAfterPurchaseChange();
+      return;
+    }
     try {
       const pur = db.createPurchase({
         supplier_id: selectedSupplier.id,

@@ -1,3 +1,4 @@
+import { staffPresentations, presentationOptions } from '../presentations.js?v=1';
 import { bindArchive, isCancelled } from './archive.js?v=2';
 // Módulo de Órdenes de Compra para Limpieza Caviahue
 // Estados: Borrador, Enviada, Confirmada, Recibida. Al recibir mercadería, transforma en Compra con Costo Caviahue.
@@ -104,8 +105,8 @@ export const OrdenesCompraView = {
                           ${contactLinks(po)}
                         ` : ''}
                       </div>
-                      ${!window.app.centralReadOnly && canManage(po) ? `
-                        <button onclick="window.ordenesCompraModule.receivePO('${po.id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold">
+                      ${canManage(po) ? `
+                        <button type="button" data-purchase-order-control onclick="window.ordenesCompraModule.receivePO('${po.id}', this)" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold">
                           Recibir Mercadería
                         </button>
                       ` : `
@@ -164,7 +165,11 @@ export const OrdenesCompraView = {
     dialog.showModal();
   },
 
-  openNewOrder(container, existing = null) {
+  async openNewOrder(container, existing = null) {
+    let presentations=[];
+    try { if (window.app.centralReadOnly) presentations=await staffPresentations(); }
+    catch(error) { window.app.showNotification(error.message,'error'); return; }
+    if(window.app.currentRoute!=='ordenes_compra') return;
     const suppliers = db.getSuppliers().filter(supplier => supplier.active !== false)
       .sort((left, right) => left.name.localeCompare(right.name, 'es'));
     const dialog = document.createElement('dialog');
@@ -209,8 +214,9 @@ export const OrdenesCompraView = {
         }
       }
       productsBox.innerHTML = products.length ? products.map((product, index) => `
-        <label class="flex items-center justify-between gap-3 border-b py-2 text-sm">
+        <label class="flex flex-wrap items-center justify-between gap-3 border-b py-2 text-sm">
           <span>${escape(product.name)} <small>${escape(product.sku)} · ${escape(product.purchase_unit || 'unidad')}</small></span>
+          <select data-order-presentation="${index}" aria-label="Presentación" class="max-w-40 rounded border p-2">${presentationOptions(presentations,product.id,existingItems.get(String(product.id))?.presentation_id)}</select>
           <input type="number" min="0" max="100000" step="any" inputmode="decimal" data-quantity="${index}" value="${escape(existingItems.get(String(product.id))?.quantity ?? '')}" placeholder="0" class="w-24 rounded border p-2">
         </label>`).join('') : (supplierId ? '<p>Este proveedor no tiene productos vinculados.</p>' : '');
       save.disabled = !products.length;
@@ -232,9 +238,14 @@ export const OrdenesCompraView = {
       const items = products.flatMap((product, index) => {
         const quantity = Number(productsBox.querySelector('[data-quantity="' + index + '"]').value);
         const previous = existingItems.get(String(product.id));
-        return quantity > 0 ? [previous ? { ...previous, quantity } : {
-          product_id: product.id, product_name: product.name, sku: product.sku || '',
-          unit: product.purchase_unit || 'unidad', quantity, unit_cost: Number(product.purchase_cost || 0)
+        const presentationId=productsBox.querySelector('[data-order-presentation="'+index+'"]').value;
+        const presentation=presentations.find(row=>row.id===presentationId);
+        const unitCost=previous && (previous.presentation_id || '')===presentationId ? previous.unit_cost :
+          Number(product.purchase_cost || 0)*(presentation ? presentation.factor/Number(product.conversion_factor || 1) : 1);
+        return quantity>0 ? [{
+          product_id:product.id,product_name:product.name,sku:presentation?.code || product.sku || '',
+          presentation_id:presentationId || null,unit:presentation?.name || product.purchase_unit || 'unidad',
+          quantity,unit_cost:Math.round(unitCost*100)/100
         }] : [];
       });
       if (!items.length) { feedback.textContent = 'Ingresá una cantidad para al menos un producto.'; return; }
@@ -274,10 +285,23 @@ export const OrdenesCompraView = {
 };
 
 window.ordenesCompraModule = {
-  receivePO(poId) {
+  async receivePO(poId, button) {
     const pos = db.getPurchaseOrders();
     const po = pos.find(p => p.id === poId);
     if (!po) return;
+    if (window.app.centralReadOnly) {
+      const invoice=prompt('Número de factura o remito para recibir ' + numberOf(po));
+      if (!invoice?.trim()) return;
+      button.disabled=true;
+      try {
+        await orderRpc('stayclean_staff_receive_purchase_order',{p_id:poId,p_invoice:invoice.trim()});
+        await window.comprasModule.refreshCentralPurchases();
+        window.app.showNotification('Orden recibida e inventario actualizado.','success');
+        window.app.navigate('ordenes_compra');
+      } catch(error) { window.app.showNotification(error.message,'error'); }
+      finally { button.disabled=false; }
+      return;
+    }
 
     if (confirm(`¿Marcar la orden ${po.order_number} como recibida e ingresar al módulo de Compras para cargar el flete Caviahue?`)) {
       po.status = 'Recibida';

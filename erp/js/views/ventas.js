@@ -1,3 +1,5 @@
+import { staffPresentations, presentationOptions } from '../presentations.js?v=1';
+let posPresentations=[];
 import { markOrderReviewed } from '../order_alerts.js';
 import { bindArchive, isCancelled } from './archive.js?v=2';
 import { statusColor } from './status_badge.js';
@@ -44,7 +46,7 @@ export const VentasView = {
               <p class="text-xs text-slate-600">${esc(row.channel)} · ${Formatter.money(Number(row.total))} · <span class="rounded px-2 py-0.5 font-semibold ${statusColor(row.status)}">${esc(row.status)}</span></p>
             </div>
             <div class="flex gap-2" data-archive-actions>
-              ${(editable ? [['view','Ver','eye'],['edit','Editar','pencil'],['void','Eliminar (anular)','trash-2']] : [['view','Ver','eye']]).map(([action,label,icon]) =>
+              ${(editable ? [['view','Ver','eye'],['edit','Editar','pencil'],['void','Eliminar (anular)','trash-2']] : [['view','Ver','eye'], ...(String(row.number).startsWith('POS-') && !row.fiscal_reference && row.status==='COMPLETADA' && row.payment_status==='PENDIENTE' ? [['void','Anular venta','trash-2']] : [])]).map(([action,label,icon]) =>
                 `<button type="button" data-history-action="${action}" data-history-row="${index}" aria-label="${label}" title="${label}" class="rounded-lg border p-2 text-[#0E3A6B] hover:bg-sky-50"><i data-lucide="${icon}" class="h-4 w-4"></i></button>`).join('')}
             </div>
           </article>`;
@@ -234,7 +236,10 @@ export const VentasView = {
     this.attachSalesListEvents();
   },
 
-  renderNewSale(container, customers, products, priceLists) {
+  async renderNewSale(container, customers, products, priceLists) {
+    try { posPresentations=window.app.centralReadOnly ? await staffPresentations() : []; }
+    catch(error) { container.textContent=error.message; return; }
+    if (window.app.currentRoute !== 'ventas') return;
     // Inicializar carro vacío si no tiene ítems
     if (!cartItems) cartItems = [];
 
@@ -471,7 +476,9 @@ export const VentasView = {
         cartItems.forEach(item => {
           const prod = products.find(p => p.id === item.product_id);
           if (prod) {
-            item.unit_price = (prod.sale_price || 0) * factor;
+            const presentation=posPresentations.find(form=>form.id===item.presentation_id);
+            item.unit_price=selectedCustomer?.cost_price_list_enabled ? item.unit_cost :
+              Number(presentation?.price ?? prod.sale_price ?? 0)*(list?.discount_pct == null ? factor : 1-Number(list.discount_pct)/100);
           }
         });
         window.ventasModule.renderCart();
@@ -495,7 +502,7 @@ export const VentasView = {
           p.name.toLowerCase().includes(query) ||
           p.sku.toLowerCase().includes(query) ||
           (p.barcode && p.barcode.includes(query)) ||
-          p.subcategory.toLowerCase().includes(query)
+          (p.subcategory || '').toLowerCase().includes(query) || posPresentations.some(form=>form.product_id===p.id && form.code.toLowerCase().includes(query))
         );
 
         if (filtered.length === 0) {
@@ -514,7 +521,7 @@ export const VentasView = {
           const price = (p.sale_price || 0) * factor;
           const isLow = p.current_stock <= (p.min_stock || 5);
           return `
-            <div class="p-2.5 flex items-center justify-between hover:bg-emerald-50/60 transition cursor-pointer" onclick="window.ventasModule.addToCart('${p.id}')">
+            <div class="p-2.5 flex items-center justify-between hover:bg-emerald-50/60 transition cursor-pointer"  >
               <div class="min-w-0 pr-2">
                 <div class="text-xs font-bold text-slate-800 truncate">${p.name}</div>
                 <div class="text-[11px] text-slate-500 flex items-center gap-2">
@@ -527,7 +534,8 @@ export const VentasView = {
               </div>
               <div class="text-right whitespace-nowrap">
                 <div class="text-xs font-bold text-emerald-700">${Formatter.money(price)}</div>
-                <button class="mt-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold">
+                <select aria-label="Presentación" class="block max-w-48 rounded border p-1">${presentationOptions(posPresentations,p.id)}</select>
+                <button type="button" data-pos-add onclick="window.ventasModule.addToCart('${p.id}', this.previousElementSibling.value)" class="mt-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold">
                   + Agregar
                 </button>
               </div>
@@ -572,28 +580,33 @@ export const VentasView = {
 
 // Objeto global de acciones para Ventas
 window.ventasModule = {
-  addToCart(productId) {
+  addToCart(productId, presentationId = '') {
     const prod = db.getProduct(productId);
     if (!prod) return;
 
     const priceLists = db.getPriceLists();
     const list = priceLists.find(pl => pl.id === selectedPriceListId);
     const factor = list ? list.margin_factor : 1.0;
-    const basePrice = (prod.sale_price || 0) * factor;
+    const presentation=posPresentations.find(form=>form.id===presentationId && form.product_id===productId);
+    const unitFactor=Number(presentation?.factor || prod.sale_to_base_factor || 1);
+    const basePrice=selectedCustomer?.cost_price_list_enabled
+      ? Number(prod.caviahue_cost || 0)*unitFactor
+      : Number(presentation?.price ?? prod.sale_price ?? 0)*(list?.discount_pct == null ? factor : 1-Number(list.discount_pct)/100);
 
-    const existing = cartItems.find(it => it.product_id === productId);
+    const existing = cartItems.find(it => it.product_id === productId && (it.presentation_id || '') === presentationId);
     if (existing) {
       existing.quantity += 1;
     } else {
       cartItems.push({
         product_id: prod.id,
-        product_name: prod.name,
-        sku: prod.sku,
-        unit_name: prod.sale_unit || 'Unidad',
-        factor_to_base: 1, // Unidad de venta estándar
+        presentation_id: presentationId || null,
+        product_name: presentation ? prod.name + ' · ' + presentation.name : prod.name,
+        sku: presentation?.code || prod.sku,
+        unit_name: presentation?.name || prod.sale_unit || 'Unidad',
+        factor_to_base: unitFactor,
         quantity: 1,
         unit_price: basePrice,
-        unit_cost: prod.caviahue_cost || 0
+        unit_cost: Number(prod.caviahue_cost || 0)*unitFactor
       });
     }
 
@@ -726,7 +739,7 @@ window.ventasModule = {
       const token = getAdminSession()?.access_token;
       if (!token) throw Error('Iniciá sesión de personal desde Ventas antes de registrar una venta.');
       const requestId=this.pendingPosId||(this.pendingPosId=crypto.randomUUID());
-      const response=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/stayclean_staff_record_sale',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_sale:{request_id:requestId,customer_name:selectedCustomer?.name||'Consumidor Final',payment_method:payMethod,notes,items:cartItems.map(it=>({product_id:it.product_id||it.id,quantity:it.quantity}))}})});
+      const response=await fetch(STAYCLEAN_SUPABASE_URL+'/rest/v1/rpc/stayclean_staff_record_sale',{method:'POST',headers:{apikey:STAYCLEAN_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_sale:{request_id:requestId,customer_id:selectedCustomer?.id,customer_name:selectedCustomer?.name||'Consumidor Final',payment_method:payMethod,notes,items:cartItems.map(it=>({product_id:it.product_id||it.id,quantity:it.quantity,presentation_id:it.presentation_id}))}})});
       const sale=await response.json();
       if (!response.ok||!sale.success) throw Error(sale.message||'No se pudo registrar la venta');
       this.pendingPosId=null;

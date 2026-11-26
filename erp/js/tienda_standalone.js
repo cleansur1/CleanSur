@@ -1,3 +1,4 @@
+import { publicPresentations } from './presentations.js?v=1';
 // Controlador de Tienda Nube / Catálogo Público para Clientes
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
 import { db } from './db.js';
@@ -362,13 +363,15 @@ class TiendaStandaloneApp {
   async loadProducts() {
     // Catálogo remoto: jamás mostrar stock local como si fuera compartido.
     try {
-      const rows = await staycleanPublicCatalog();
+      const [rows, forms] = await Promise.all([staycleanPublicCatalog(), publicPresentations()]);
+      this.presentations = forms;
       this.updateCatalogTotal(rows);
       this.products = rows.map(p => ({
         ...p, current_stock: Number(p.available_stock),
-        sale_price: Number(p.sale_price), in_stock: Number(p.available_stock) > 0,
+        sale_price: Number(p.sale_price), in_stock: Number(p.available_stock) > 0 || forms.some(form=>form.product_id===p.id && Number(form.available)>0),
         img_url: p.image_url || '../erp/assets/stayclean-logo.jpg',
         has_options: false, promo_badges: [], discount_pct: 0,
+        display_price: forms.some(form=>form.product_id===p.id) ? Math.min(...forms.filter(form=>form.product_id===p.id).map(form=>Number(form.price))) : Number(p.sale_price),
         reference_price: Number(p.sale_price)
       }));
       this.applyFilters();
@@ -625,7 +628,7 @@ class TiendaStandaloneApp {
               <!-- Bloque de Precios Estilo Voltra (Precio actual + tachado) -->
               <div class="pt-2 flex items-baseline gap-2">
                 <span class="price-stayclean text-base sm:text-lg font-black tracking-tight">
-                  ${Formatter.money(p.sale_price)}
+                  ${Formatter.money(p.display_price ?? p.sale_price)}
                 </span>
                 <span class="text-xs text-slate-400 line-through font-normal">
                   ${Formatter.money(p.reference_price)}
@@ -662,7 +665,7 @@ class TiendaStandaloneApp {
   // ==========================================
   // MODAL VISTA RÁPIDA / OPCIONES
   // ==========================================
-  async openProductModal(productId) {
+  async openProductModal(productId, presentationId) {
     if (!this.catalogAromas.size) await this.loadAromaFilter();
     const p = this.products.find(item => item.id === productId);
     if (!p) return;
@@ -671,9 +674,11 @@ class TiendaStandaloneApp {
     const content = document.getElementById('productDetailContent');
     if (!modal || !content) return;
 
-    const inCart = this.cart.filter(item => item.id === p.id).reduce((sum,item)=>sum+item.quantity,0);
+    const forms = (this.presentations || []).filter(form=>form.product_id===p.id);
+    const form = forms.find(row=>row.id===presentationId) || forms.find(row=>this.availablePresentation(p,row)>0) || forms[0];
     const aromas = [...(this.catalogAromas.get(p.id) || [])];
-    const available = p.in_stock ? Math.max(0, Math.floor(Number(p.current_stock) || 0) - inCart) : 0;
+    const available = this.availablePresentation(p,form);
+    const price = form ? Number(form.price) : p.sale_price;
 
     content.innerHTML = `
       <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-[#0E3A6B] text-white">
@@ -696,7 +701,7 @@ class TiendaStandaloneApp {
             <div class="flex items-center gap-2">
               ${p.discount_pct > 0 ? `<span class="badge-off px-2.5 py-0.5 rounded text-[11px] font-bold">-${p.discount_pct}% OFF</span>` : ''}
               <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                ${p.in_stock ? `Stock disponible (${p.current_stock} unid.)` : 'Sin stock'}
+                ${available > 0 ? `Disponible (${available})` : 'Sin stock'}
               </span>
             </div>
 
@@ -704,8 +709,7 @@ class TiendaStandaloneApp {
             <p class="text-xs text-slate-500">${escapeCatalogText(p.description || p.presentation || 'Insumo de primera calidad para gastronomía y hotelería.')}</p>
             
             <div class="pt-2 flex items-baseline gap-2">
-              <span class="price-stayclean text-2xl font-black">${Formatter.money(p.sale_price)}</span>
-              <span class="text-sm text-slate-400 line-through">${Formatter.money(p.reference_price)}</span>
+              <span class="price-stayclean text-2xl font-black">${Formatter.money(price)}</span>
             </div>
             <p class="text-[11px] text-slate-400">Precios finales en Pesos Argentinos (ARS) con IVA incluido.</p>
           </div>
@@ -716,6 +720,7 @@ class TiendaStandaloneApp {
         </p>
 
         <div class="space-y-3 border-t border-slate-100 pt-4">
+          ${forms.length ? `<label class="block font-semibold">Presentación <select id="modalPresentation" class="block w-full rounded-lg border p-3">${forms.map(row=>`<option value="${row.id}" ${row.id===form.id ? 'selected' : ''}>${escapeCatalogText(row.name)} · ${Formatter.money(Number(row.price))} · ${this.availablePresentation(p,row)} disp.</option>`).join('')}</select></label>` : ''}
           ${available > 0 ? `
             ${aromas.length ? `<label class="block font-semibold text-slate-700">Aroma<select id="modalProductAroma" required class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3"><option value="">Seleccioná un aroma</option>${aromas.map(aroma=>`<option value="${escapeCatalogText(aroma)}">${escapeCatalogText(aroma.toLocaleUpperCase('es-AR'))}</option>`).join('')}</select></label>` : ''}
             <div class="flex items-center justify-between gap-3">
@@ -743,7 +748,29 @@ class TiendaStandaloneApp {
     `;
 
     modal.classList.remove('hidden');
+    const selector=content.querySelector('#modalPresentation');
+    if (selector) selector.onchange=async()=>{
+      const aroma=content.querySelector('#modalProductAroma')?.value;
+      await this.openProductModal(productId,selector.value);
+      const input=content.querySelector('#modalProductAroma');
+      if (input && aroma) input.value=aroma;
+      content.querySelector('#modalPresentation')?.focus();
+    };
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  availablePresentation(product, form = null) {
+    const items=this.cart.filter(item=>item.id===product.id);
+    const forms=(this.presentations || []).filter(row=>row.product_id===product.id);
+    const baseFactor=Number(forms[0]?.base_factor || 1);
+    if (!form) {
+      const used=items.filter(item=>!item.sealed).reduce((sum,item)=>sum+item.quantity*Number(item.factor || baseFactor),0);
+      return Math.max(0,Math.floor(Number(product.current_stock)-used/baseFactor));
+    }
+    const relevant=items.filter(item=>form.sealed || !item.sealed);
+    const used=relevant.reduce((sum,item)=>sum+item.quantity*Number(item.factor || baseFactor),0);
+    const same=items.filter(item=>item.presentationId===form.id).reduce((sum,item)=>sum+item.quantity,0);
+    return Math.max(0,Math.min(Number(form.available)-same,Math.floor((Number(form.available_base)-used)/Number(form.factor))));
   }
 
   stepModalQty(delta) {
@@ -758,7 +785,8 @@ class TiendaStandaloneApp {
     if (!input || !input.reportValidity()) return;
     const aroma = document.getElementById('modalProductAroma');
     if (aroma && !aroma.reportValidity()) return;
-    if (!this.addToCart(productId, input.valueAsNumber, aroma?.value || '')) return;
+    const presentationId=document.getElementById('modalPresentation')?.value;
+    if (!this.addToCart(productId, input.valueAsNumber, aroma?.value || '', presentationId)) return;
     this.closeProductModal();
     if (checkout) return this.proceedToCheckout();
   }
@@ -771,13 +799,13 @@ class TiendaStandaloneApp {
   // ==========================================
   // CARRITO DE COMPRAS (DRAWER SLIDE-OVER)
   // ==========================================
-  addToCart(productId, qty = 1, aroma = '') {
+  addToCart(productId, qty = 1, aroma = '', presentationId) {
     const p = this.products.find(item => item.id === productId);
     if (!p || !p.in_stock) return;
 
-    const existing = this.cart.find(item => item.id === productId && (item.aroma || '') === aroma);
-    const totalInCart = this.cart.filter(item=>item.id===productId).reduce((sum,item)=>sum+item.quantity,0);
-    if (!Number.isInteger(qty) || qty < 1 || qty + totalInCart > Number(p.current_stock)) {
+    const form=(this.presentations || []).find(row=>row.id===presentationId && row.product_id===productId);
+    const existing = this.cart.find(item => item.id === productId && item.presentationId===presentationId && (item.aroma || '') === aroma);
+    if (!Number.isInteger(qty) || qty < 1 || (presentationId && !form) || qty > this.availablePresentation(p,form)) {
       this.showNotice('Revisá la cantidad disponible para este producto.');
       return false;
     }
@@ -788,8 +816,9 @@ class TiendaStandaloneApp {
         id: p.id,
         aroma,
         name: p.name,
-        price: p.sale_price,
-        presentation: p.presentation || p.sale_unit,
+        price: Number(form?.price ?? p.sale_price),
+        presentation: form?.name || p.presentation || p.sale_unit,
+        presentationId, factor: form?.factor, sealed: form?.sealed, baseFactor: form?.base_factor,
         img_url: p.img_url,
         quantity: qty
       });
@@ -805,8 +834,8 @@ class TiendaStandaloneApp {
     if (!item) return;
 
     const product = this.products.find(p=>p.id===item.id);
-    const total = this.cart.filter(i=>i.id===item.id).reduce((sum,i)=>sum+i.quantity,0);
-    if (delta > 0 && (!product || total+delta>product.current_stock)) return;
+    const form=(this.presentations || []).find(row=>row.id===item.presentationId);
+    if (delta > 0 && (!product || (item.presentationId && !form) || delta>this.availablePresentation(product,form))) return;
     item.quantity += delta;
     if (item.quantity <= 0) this.cart.splice(index,1);
     this.saveCart();
@@ -1153,13 +1182,18 @@ class TiendaStandaloneApp {
     try {
       const prices=await staycleanCustomerRpc('stayclean_staff_assisted_prices',{p_customer_id:c.id,p_product_ids:this.cart.map(item=>item.id)});
       if(this.assistedCustomer!==c) return;
-      if(this.cart.some(item=>!Number.isFinite(Number(prices[item.id]))||Number(prices[item.id])<=0))throw Error('Falta un precio válido para un producto');
+      if(this.cart.some(item=>!Number.isFinite(this.assistedUnitPrice(item,prices,c))||this.assistedUnitPrice(item,prices,c)<=0))throw Error('Falta un precio válido para un producto');
       this.assistedPrices=prices;
-      const total=Math.round(this.cart.reduce((sum,item)=>sum+Number(prices[item.id])*item.quantity,0)*100)/100;
+      const total=Math.round(this.cart.reduce((sum,item)=>sum+this.assistedUnitPrice(item,prices,c)*item.quantity,0)*100)/100;
       modal.querySelector('#assistedOrderTotal').textContent='Total para '+c.name+': '+Formatter.money(total);
       modal.querySelector('#assistedError').textContent='';
       modal.querySelector('#assistedConfirm').disabled=false;
     } catch(e){modal.querySelector('#assistedError').textContent=e.message;}
+  }
+
+  assistedUnitPrice(item, prices, customer) {
+    if (!item.presentationId) return Number(prices[item.id]);
+    return customer.cost_price_list_enabled ? Math.round(Number(prices[item.id])*item.factor/item.baseFactor*100)/100 : item.price;
   }
 
   async submitAssistedOrder() {
@@ -1173,14 +1207,14 @@ class TiendaStandaloneApp {
     this.sendingOrder=true;
     button.disabled=true;
     try {
-      const total=Math.round(this.cart.reduce((sum,item)=>sum+Number(this.assistedPrices[item.id])*item.quantity,0)*100)/100;
+      const total=Math.round(this.cart.reduce((sum,item)=>sum+this.assistedUnitPrice(item,this.assistedPrices,c)*item.quantity,0)*100)/100;
       const requestId=this.pendingRequestId||(this.pendingRequestId=crypto.randomUUID());
       sessionStorage.setItem('stayclean_pending_order_id',requestId);
       const result=await staycleanCustomerRpc('stayclean_staff_assisted_order',{p_order:{
         request_id:requestId,customer_id:c.id,customer_name:c.name,customer_phone:c.phone,
         customer_email:c.email||'',delivery_address:c.address,delivery_city:c.city,
         payment_method:method,expected_cost_total:total,
-        items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity,aroma:item.aroma || null}))
+        items:this.cart.map(item=>({product_id:item.id,quantity:item.quantity,aroma:item.aroma || null,presentation_id:item.presentationId || null}))
       }});
       this.cart=[];
       this.saveCart();
@@ -1237,7 +1271,7 @@ class TiendaStandaloneApp {
 
     const prof = this.customerProfile;
     const totalCount = this.cart.reduce((sum, item) => sum + item.quantity, 0);
-    const unitPrice = item => costPrices ? Number(costPrices[item.id]) : item.price;
+    const unitPrice = item => costPrices ? Math.round(Number(costPrices[item.id])*Number(item.factor || 1)/Number(item.baseFactor || 1)*100)/100 : item.price;
     if (costPrices && this.cart.some(item => !Number.isFinite(unitPrice(item)))) return;
     const totalAmount = Math.round(this.cart.reduce((sum, item) => sum + unitPrice(item) * item.quantity, 0) * 100) / 100;
     if (costPrices) this.expectedCostTotal = totalAmount;
@@ -1369,7 +1403,7 @@ class TiendaStandaloneApp {
         delivery_city: city,
         payment_method: paymentMethod,
         expected_cost_total: this.expectedCostTotal,
-        items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity, aroma: item.aroma || null }))
+        items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity, aroma: item.aroma || null, presentation_id: item.presentationId || null }))
       });
       this.cart = [];
       this.saveCart();

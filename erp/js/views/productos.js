@@ -1,3 +1,4 @@
+import { staffPresentations } from '../presentations.js?v=1';
 // Módulo de Productos & Catálogo para Limpieza Caviahue
 // CRUD completo, conversiones de unidades, costos Caviahue, márgenes vs markup e historial.
 
@@ -28,7 +29,14 @@ export const ProductosView = {
     const suppliers = db.getSuppliers();
 
     if (isNew || editId) {
-      this.renderProductForm(container, categories, suppliers, editId ? db.getProduct(editId) : null);
+      const product = editId ? db.getProduct(editId) : null;
+      let presentations = [];
+      if (product && window.app.centralReadOnly) {
+        try { presentations = await staffPresentations(product.id); }
+        catch (error) { container.textContent = error.message; return; }
+      }
+      if (window.app.currentRoute !== 'productos') return;
+      this.renderProductForm(container, categories, suppliers, product, presentations);
       if (params.focusPrice) container.querySelector('#prodSalePrice')?.focus();
     } else if (viewId) {
       this.renderProductDetail(container, db.getProduct(viewId));
@@ -152,7 +160,7 @@ export const ProductosView = {
     this.attachListFilters();
   },
 
-  renderProductForm(container, categories, suppliers, product = null) {
+  renderProductForm(container, categories, suppliers, product = null, presentations = []) {
     const isEdit = !!product;
     container.innerHTML = `
       <div class="space-y-6 animate-fade-in max-w-4xl mx-auto">
@@ -338,6 +346,15 @@ export const ProductosView = {
             </div>
           </div>
 
+          ${window.app.centralReadOnly ? `
+          <section class="space-y-3 rounded-xl border bg-white p-5">
+            <h2 class="font-bold">Presentaciones comerciales</h2>
+            <label class="flex items-center gap-2"><input type="checkbox" name="publish_online" ${product?.publish_online ? 'checked' : ''}> Publicar en tienda online</label>
+            <p class="text-sm">Cada factor indica cuántas unidades base consume o incorpora la presentación. La cantidad de embalajes cerrados forma parte del stock total.</p>
+            <div data-presentation-rows class="space-y-3"></div>
+            <button type="button" data-add-presentation class="rounded border px-3 py-2 text-blue-800">+ Agregar presentación</button>
+          </section>` : ''}
+
           <!-- Botones de Acción -->
           <div class="flex items-center justify-end gap-3 pt-2">
             <button type="button" onclick="window.app.navigate('productos')" class="px-5 py-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">
@@ -354,6 +371,7 @@ export const ProductosView = {
     if (window.lucide) window.lucide.createIcons();
     const form = container.querySelector("#productForm");
     form.initialValues = new FormData(form);
+    if (form.querySelector('[data-presentation-rows]')) this.bindPresentationForm(form, presentations);
     const supplierSelect = form.elements.supplier_id;
     const newFields = form.querySelector('#newSupplierFields');
     const syncSupplier = () => {
@@ -364,6 +382,49 @@ export const ProductosView = {
     supplierSelect.addEventListener('change', syncSupplier);
     syncSupplier();
     this.attachFormListeners();
+  },
+
+  bindPresentationForm(form, presentations) {
+    const list = form.querySelector('[data-presentation-rows]');
+    const add = (presentation = {}) => {
+      const row = document.createElement('fieldset');
+      row.className = 'grid gap-2 rounded-lg border p-3 sm:grid-cols-2';
+      row.dataset.presentation = presentation.id || crypto.randomUUID();
+      row.dataset.expectedSealed = String(presentation.sealed_count || 0);
+      row.innerHTML = `
+        <label>Nombre<input data-name required maxlength="120" class="block w-full rounded border p-2"></label>
+        <label>Código comercial o de barras<input data-code required maxlength="120" class="block w-full rounded border p-2"></label>
+        <label>Equivalencia en unidades base<input data-factor type="number" min="1" max="100000" step="1" required class="block w-full rounded border p-2"></label>
+        <label>Precio de venta<input data-price type="number" min="0.01" step="0.01" required class="block w-full rounded border p-2"></label>
+        <label><input data-active type="checkbox"> Activa</label>
+        <label><input data-online type="checkbox"> Visible en tienda</label>
+        <label><input data-sealed type="checkbox"> Cerrada de fábrica</label>
+        <label>Embalajes cerrados en stock<input data-count type="number" min="0" step="1" required class="block w-full rounded border p-2"></label>
+        <button type="button" data-remove class="justify-self-start rounded border px-3 py-2 text-rose-700">Eliminar presentación</button>`;
+      for (const [key, value] of Object.entries({name:presentation.name || '', code:presentation.code || '', factor:presentation.factor || 1, price:presentation.price || '', count:presentation.sealed_count || 0})) row.querySelector('[data-'+key+']').value=value;
+      for (const [key, value] of Object.entries({active:presentation.active ?? true, online:presentation.online ?? false, sealed:presentation.sealed ?? false})) row.querySelector('[data-'+key+']').checked=value;
+      const sealed = row.querySelector('[data-sealed]');
+      const count = row.querySelector('[data-count]');
+      const sync = () => { count.disabled = !sealed.checked; count.closest('label').hidden = !sealed.checked; };
+      sealed.onchange=sync;
+      sync();
+      row.querySelector('[data-remove]').onclick=()=>row.remove();
+      list.append(row);
+      return row;
+    };
+    presentations.forEach(add);
+    form.querySelector('[data-add-presentation]').onclick=()=>add().querySelector('[data-name]').focus();
+    form.initialPresentationValues=JSON.stringify(this.readPresentations(form));
+  },
+
+  readPresentations(form) {
+    return Array.from(form.querySelectorAll('[data-presentation]'), row => {
+      const field = key => row.querySelector('[data-'+key+']');
+      return {id:row.dataset.presentation, name:field('name').value.trim(), code:field('code').value.trim(),
+        factor:Number(field('factor').value), price:Number(field('price').value), active:field('active').checked,
+        online:field('online').checked, sealed:field('sealed').checked, sealed_count:field('sealed').checked ? Number(field('count').value) : 0,
+        expected_sealed_count:Number(row.dataset.expectedSealed)};
+    });
   },
 
   renderProductDetail(container, product) {
@@ -643,6 +704,9 @@ window.productosModule = {
       for (const key of ['min_stock', 'max_stock', 'target_margin']) {
         if (key in changes) changes[key] = Number(formData.get(key));
       }
+      const forms = this.readPresentations(form);
+      if (JSON.stringify(forms) !== form.initialPresentationValues) changes.commercial_presentations = forms;
+      if (formData.has('publish_online') !== form.initialValues.has('publish_online')) changes.publish_online = formData.has('publish_online');
       if (!Object.keys(changes).length && !newSupplier) {
         window.app.navigate('productos');
         return;
@@ -651,7 +715,7 @@ window.productosModule = {
       if (submit.disabled) return;
       submit.disabled = true;
       try {
-        const result = (!product || newSupplier)
+        const result = (!product || newSupplier || 'commercial_presentations' in changes || 'publish_online' in changes)
           ? await saveCentralProductForm(editId, changes, newSupplier, product?.current_stock ?? 0, crypto.randomUUID())
           : {product: await editCentralProduct(editId, changes, product.current_stock)};
         const updated = result.product;
