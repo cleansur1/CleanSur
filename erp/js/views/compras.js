@@ -1,5 +1,8 @@
 import { staffPresentations, presentationOptions } from '../presentations.js?v=1';
-let purchasePresentations=[];
+let purchasePresentations = [];
+let purchaseItems = [];
+let logisticsTotal = 0;
+let distributionMethod = 'VALOR';
 import { bindArchive, isCancelled } from './archive.js?v=2';
 import { statusColor } from './status_badge.js';
 import { db } from '../db.js';
@@ -396,15 +399,7 @@ export const ComprasView = {
   },
 
   async renderNewPurchase(container, suppliers, products) {
-    try {
-      if (window.app.centralReadOnly) {
-        const { refreshAdminSession } = await import('../supabase_admin.js');
-        await refreshAdminSession();
-      }
-      purchasePresentations = window.app.centralReadOnly ? await staffPresentations() : [];
-    }
-    catch(error) { container.textContent=error.message; return; }
-    if (window.app.currentRoute !== 'compras') return;
+    purchasePresentations = [];
     purchaseItems = [];
     logisticsTotal = 0;
     distributionMethod = 'VALOR';
@@ -433,9 +428,10 @@ export const ComprasView = {
                 <select id="purchaseSupplierSelect" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
                   <option value="">Seleccionar Proveedor...</option>
                   ${suppliers.map(s => `
-                    <option value="${s.id}">${s.name} (${s.city})</option>
+                    <option value="${escapeHtml(s.id)}">${escapeHtml(s.name)} (${escapeHtml(s.city)})</option>
                   `).join('')}
                 </select>
+                <p id="purchaseSupplierDetails" class="mt-2 text-slate-600"></p>
               </div>
 
               <div>
@@ -587,6 +583,22 @@ export const ComprasView = {
 
     if (window.lucide) window.lucide.createIcons();
     this.attachNewPurchaseEvents(products, suppliers);
+    if (window.app.centralReadOnly) {
+      const search = container.querySelector('#purchaseProductSearch');
+      try {
+        const { refreshAdminSession } = await import('../supabase_admin.js');
+        await refreshAdminSession();
+        const presentations = await staffPresentations();
+        if (search.isConnected) {
+          purchasePresentations = presentations;
+          search.dispatchEvent(new Event('input'));
+        }
+      } catch {
+        if (search.isConnected) {
+          window.app.showNotification('No se pudieron cargar las presentaciones. Podés usar la unidad habitual.', 'info');
+        }
+      }
+    }
   },
 
   attachNewPurchaseEvents(products, suppliers) {
@@ -594,6 +606,14 @@ export const ComprasView = {
     const resultsContainer = document.getElementById('purchaseSearchResults');
     const logisticsInput = document.getElementById('purchaseLogisticsTotal');
     const logisticsMethod = document.getElementById('purchaseLogisticsMethod');
+
+    const supplierSelect = document.getElementById('purchaseSupplierSelect');
+    supplierSelect.addEventListener('change', () => {
+      const supplier = suppliers.find(item => item.id === supplierSelect.value);
+      document.getElementById('purchaseSupplierDetails').textContent = supplier
+        ? [supplier.cuit && 'CUIT ' + supplier.cuit, supplier.address, supplier.city].filter(Boolean).join(' · ')
+        : '';
+    });
 
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
@@ -616,11 +636,11 @@ export const ComprasView = {
         resultsContainer.innerHTML = filtered.slice(0, 8).map(p => `
           <div class="p-2 flex items-center justify-between hover:bg-blue-50/60 transition cursor-pointer"  >
             <div>
-              <div class="text-xs font-bold text-slate-800">${p.name}</div>
-              <div class="text-[11px] text-slate-500">${p.sku} • Unidad Compra: ${p.purchase_unit || p.sale_unit} (Factor: ${p.conversion_factor || 1})</div>
+              <div class="text-xs font-bold text-slate-800">${escapeHtml(p.name)}</div>
+              <div class="text-[11px] text-slate-500">${escapeHtml(p.sku)} • Unidad Compra: ${escapeHtml(p.purchase_unit || p.sale_unit)} (Factor: ${p.conversion_factor || 1})</div>
             </div>
             <select aria-label="Presentación" class="max-w-48 rounded border p-1">${presentationOptions(purchasePresentations,p.id)}</select>
-            <button type="button" data-purchase-line onclick="window.comprasModule.addItem('${p.id}', this.previousElementSibling.value)" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold">
+            <button type="button" data-purchase-line onclick="window.comprasModule.addItem(${attributeArgument(p.id)}, this.previousElementSibling.value)" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold">
               + Agregar
             </button>
           </div>
@@ -1251,16 +1271,16 @@ export const ComprasView = {
       const subtotal = item.quantity * item.unit_invoice_cost;
       return `
         <tr class="hover:bg-slate-50 transition">
-          <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.sku || '-'}</td>
+          <td class="py-3 px-3 font-mono font-bold text-slate-700">${escapeHtml(item.sku || '-')}</td>
           <td class="py-3 px-3">
-            <span class="font-bold text-slate-900 block">${item.product_name}</span>
-            <span class="text-[10px] text-slate-400">Unidad de compra: ${item.unit_name} (x${item.factor_to_base} base)</span>
+            <span class="font-bold text-slate-900 block">${escapeHtml(item.product_name)}</span>
+            <span class="text-[10px] text-slate-400">Unidad de compra: ${escapeHtml(item.unit_name)} (x${item.factor_to_base} base)</span>
           </td>
           <td class="py-3 px-3 text-center">
             <input type="number" min="1" value="${item.quantity}" onchange="window.comprasModule.updateQty(${idx}, this.value)" class="w-16 px-2 py-1 border border-slate-300 rounded text-center text-xs font-bold">
           </td>
           <td class="py-3 px-3 text-right">
-            <input type="number" min="0" value="${item.unit_invoice_cost}" onchange="window.comprasModule.updateCost(${idx}, this.value)" class="w-24 px-2 py-1 border border-slate-300 rounded text-right text-xs font-medium">
+            <input type="number" min="0" step="0.01" value="${item.unit_invoice_cost}" onchange="window.comprasModule.updateCost(${idx}, this.value)" class="w-24 px-2 py-1 border border-slate-300 rounded text-right text-xs font-medium">
           </td>
           <td class="py-3 px-3 text-right font-mono font-semibold text-slate-900">${Formatter.money(subtotal)}</td>
           <td class="py-3 px-3 text-right font-mono text-blue-700">${Formatter.money(item.allocated_logistics || 0)}</td>
