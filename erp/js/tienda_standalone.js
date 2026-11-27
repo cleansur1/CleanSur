@@ -1,3 +1,4 @@
+import { downloadOrderRemito } from './order_remito.js?v=1';
 import { publicPresentations } from './presentations.js?v=1';
 // Controlador de Tienda Nube / Catálogo Público para Clientes
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
@@ -84,9 +85,42 @@ class TiendaStandaloneApp {
     content.classList.add('whitespace-pre-line');
   }
 
-  showTransferDetails(order, total) {
+  bindRemitoDownload(content, getOrder, profile = this.customerProfile) {
+    const button = content.querySelector('[data-download-remito]');
+    if (!button) return;
+    const feedback = content.querySelector('[data-remito-status]');
+    button.onclick = async () => {
+      button.disabled = true;
+      feedback.textContent = '';
+      try {
+        const order = await getOrder();
+        if (!order) throw Error('El pedido todavía no está disponible. Volvé a intentar desde Mis pedidos.');
+        await downloadOrderRemito(order, profile);
+      } catch (error) {
+        feedback.textContent = error.message || 'No se pudo descargar el remito.';
+      } finally {
+        button.disabled = false;
+      }
+    };
+  }
+
+  async findOrderForRemito(number) {
+    const orders = await staycleanCustomerOrders();
+    return orders.find(order => String(order.number) === String(number));
+  }
+
+  showOrderConfirmationWithRemito(number, message) {
+    const content = this.showStoreDialog('Pedido registrado');
+    content.innerHTML = `
+      <p>${escapeCatalogText(message)}</p>
+      ${number ? '<button type="button" data-download-remito class="btn-stayclean w-full rounded-xl py-3 font-bold">Descargar remito PDF</button><p data-remito-status role="status" class="text-sm text-slate-600"></p>' : ''}`;
+    this.bindRemitoDownload(content, () => this.findOrderForRemito(number));
+  }
+
+  showTransferDetails(order, total, customerCanDownload = true) {
     const content = this.showStoreDialog('Datos para transferir');
     const amount = total == null ? NaN : Number(total);
+    const message = encodeURIComponent('Hola CleanSur, les envío el comprobante de transferencia del pedido ' + order + '.');
     content.innerHTML = `
       <p class="font-bold text-[#0E3A6B]">Pedido ${escapeCatalogText(order)}</p>
       <div class="rounded-xl bg-sky-50 p-4">
@@ -100,8 +134,11 @@ class TiendaStandaloneApp {
         <div><dt class="text-xs text-slate-500">CVU</dt><dd class="flex flex-wrap items-center justify-between gap-2"><span class="font-mono select-all break-all">0000003100075971427558</span><button type="button" data-copy-transfer="0000003100075971427558" class="rounded-lg border px-3 py-2 font-semibold">Copiar CVU</button></dd></div>
       </dl>
       <p data-transfer-status role="status" aria-live="polite" class="text-sm text-slate-600"></p>
-      <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Tu pedido está registrado. El pago queda pendiente de acreditación hasta que CleanSur verifique la transferencia.</p>
+      <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Enviá el comprobante de transferencia al WhatsApp de CleanSur, <strong>11 4156 4004</strong>. El pago queda pendiente hasta que verifiquemos la acreditación.</p>
+      <a href="https://wa.me/5491141564004?text=${message}" target="_blank" rel="noopener noreferrer" class="block rounded-xl bg-emerald-700 px-4 py-3 text-center font-bold text-white">Enviar comprobante por WhatsApp</a>
+      ${customerCanDownload ? '<button type="button" data-download-remito class="w-full rounded-xl border px-4 py-2 font-bold text-[#0E3A6B]">Descargar remito PDF</button><p data-remito-status role="status" class="text-sm text-slate-600"></p>' : ''}
       <form method="dialog"><button class="btn-stayclean w-full rounded-xl py-3 font-bold">Listo</button></form>`;
+    this.bindRemitoDownload(content, () => this.findOrderForRemito(order));
     for (const button of content.querySelectorAll('[data-copy-transfer]')) {
       button.onclick = async () => {
         const status = content.querySelector('[data-transfer-status]');
@@ -163,10 +200,11 @@ class TiendaStandaloneApp {
         <p class="text-xs text-slate-600">Comprobante de pedido. Sin validez como factura fiscal ni comprobante de pago.</p>
         <div class="flex flex-wrap justify-between gap-3">
           <button type="button" data-back-orders class="font-semibold text-[#0E3A6B] underline">Volver a mis pedidos</button>
-          <button type="button" data-print-receipt class="btn-stayclean rounded-xl px-4 py-2 font-bold">Imprimir / Guardar PDF</button>
-        </div>`;
+          <button type="button" data-download-remito class="btn-stayclean rounded-xl px-4 py-2 font-bold">Descargar remito PDF</button>
+        </div>
+        <p data-remito-status role="status" class="text-sm text-slate-600"></p>`;
       content.querySelector('[data-back-orders]').onclick = renderOrders;
-      content.querySelector('[data-print-receipt]').onclick = () => window.print();
+      this.bindRemitoDownload(content, () => order, profile);
     };
     renderOrders();
   }
@@ -1014,7 +1052,7 @@ class TiendaStandaloneApp {
       if(data.status==='approved'||data.status==='paid'||data.status==='completed'){
         history.replaceState(null,'',location.pathname);
         this.cart=[];this.saveCart();this.pendingRequestId=null;sessionStorage.removeItem('stayclean_pending_order_id');
-        this.showNotice('Pago aprobado. Pedido '+(data.order_number||'registrado')+'. Podés verlo desde Mi cuenta → PEDIDOS.');
+        this.showOrderConfirmationWithRemito(data.order_number, 'Pago aprobado. Podés consultar tu pedido desde Mi cuenta → Mis pedidos.');
       } else {
         this.showNotice('Estado del pago: '+(data.mp_status||data.status||'pendiente')+'. Conservá este enlace para volver a consultar. No repitas el pago hasta verificar su estado.');
       }
@@ -1228,7 +1266,7 @@ class TiendaStandaloneApp {
       sessionStorage.removeItem('stayclean_pending_order_id');
       modal.remove();
       await this.loadProducts();
-      if (method === 'Transferencia Bancaria') this.showTransferDetails(result.order_number, result.total ?? total);
+      if (method === 'Transferencia Bancaria') this.showTransferDetails(result.order_number, result.total ?? total, false);
       else this.showNotice('Venta asistida registrada para '+c.name+'. Pedido '+result.order_number+'. Stock descontado.');
     }catch(e){error.textContent='No se registró el pedido: '+e.message+'. El carrito permanece intacto.';}
     finally{this.sendingOrder=false;if(button.isConnected)button.disabled=false;}
@@ -1376,7 +1414,7 @@ class TiendaStandaloneApp {
           <button onclick="window.tiendaApp.confirmSelectedPayment()" class="w-full py-3.5 rounded-xl font-bold text-sm bg-[#0E3A6B] hover:bg-[#1E88E5] text-white shadow-md flex items-center justify-center gap-2">
             <i data-lucide="check-circle" class="w-4 h-4"></i><span>Continuar con la forma de pago elegida</span>
           </button>
-          <p class="text-[10px] text-slate-500 text-center">El pedido se registra para coordinar el pago.</p>
+          <p class="text-[10px] text-slate-500 text-center">El pedido se registra para coordinar el pago. Si elegís transferencia, enviá el comprobante por WhatsApp al 11 4156 4004.</p>
         </div>
 
       </div>
@@ -1426,7 +1464,7 @@ class TiendaStandaloneApp {
           } catch (error) { console.warn('No se pudo consultar el total del pedido', error); }
         }
         this.showTransferDetails(savedOrder.order_number, total);
-      } else this.showNotice(`Pedido ${savedOrder.order_number} registrado en CleanSur. Podés ver el comprobante en Mi cuenta → Mis pedidos.`);
+      } else this.showOrderConfirmationWithRemito(savedOrder.order_number, `Pedido ${savedOrder.order_number} registrado. También podés descargar el remito desde Mi cuenta → Mis pedidos.`);
     } catch (error) {
       console.error('Error registrando pedido en Supabase', error);
       this.showNotice('No se registró el pedido: ' + error.message + '. El carrito permanece intacto.');
