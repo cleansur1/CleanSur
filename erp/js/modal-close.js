@@ -1,6 +1,6 @@
 (() => {
-  const overlays = 'dialog, [id$="Modal"].fixed, [id$="Dialog"].fixed';
-  const closeControls = 'button[aria-label^="Cerrar"], button[title="Cerrar"], button[onclick*="close"], button.close-purchase-detail, button[id$="Close"], button[data-close], button:has([data-lucide="x"])';
+  const overlays = 'dialog, [id$="modal" i].fixed, [id$="dialog" i].fixed';
+  const closeControls = 'button[aria-label^="Cerrar"], button[title="Cerrar"], button[onclick*="close" i], button[onclick*="classList.add(\'hidden\')"], button.close-purchase-detail, button[id$="Close"], button[data-close], button:has([data-lucide="x"])';
 
   function enhance(modal) {
     const native = modal.matches('dialog');
@@ -11,9 +11,11 @@
     const toolbar = panel.querySelector(':scope > .cs-modal-toolbar');
     if (toolbar) return;
 
-    const original = Array.from(panel.querySelectorAll(closeControls)).find(button =>
-      button.closest(overlays) === modal
+    const controls = Array.from(panel.querySelectorAll(closeControls)).filter(button =>
+      button.closest(overlays) === modal && !button.closest('.cs-modal-toolbar')
     );
+    const original = controls.find(button => /^(?:×|✕|x)$/i.test(button.textContent.trim()) ||
+      button.querySelector('[data-lucide="x"], .lucide-x')) || controls[0];
     if (original) {
       original.dataset.csModalClose = '';
       if (!original.textContent.trim()) original.textContent = '×';
@@ -28,7 +30,8 @@
     close.className = 'cs-modal-close';
     close.textContent = '×';
     close.addEventListener('click', () => {
-      if (original?.isConnected && !original.disabled) {
+      if (original?.isConnected && original.disabled) return;
+      if (original?.isConnected) {
         original.click();
       } else if (native) {
         const cancel = new Event('cancel', {cancelable:true});
@@ -37,6 +40,7 @@
         modal.remove();
       } else {
         modal.classList.add('hidden');
+        if (modal.style.display) modal.style.display = 'none';
       }
     });
     if (original && /^(?:×|✕|x)$/i.test(original.textContent.trim())) original.hidden = true;
