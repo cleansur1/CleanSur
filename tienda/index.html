@@ -93,8 +93,11 @@
   <link rel="stylesheet" href="../erp/assets/cleansur-brand.css?v=3">
 <link rel="apple-touch-icon" sizes="180x180" href="../erp/assets/apple-touch-icon.png?v=1">
 <style>
-.cs-modal-close {position:absolute;right:12px;top:12px;z-index:5;display:grid;place-items:center;width:42px;height:42px;border:1px solid #cbd5e1;border-radius:10px;background:white;color:#0e3a6b;font-size:28px;line-height:1;cursor:pointer}
-[data-cs-modal-close] {min-width:40px;min-height:40px;font-size:24px;line-height:1;flex-shrink:0}
+.cs-modal-scroll { max-height:calc(100vh - 2rem); max-height:calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; }
+.cs-modal-toolbar { position:sticky; top:0; z-index:20; display:flex; justify-content:flex-end; padding:4px 8px; background:#fff; }
+.cs-modal-close { display:grid; place-items:center; min-width:44px; min-height:44px; border:1px solid #cbd5e1; border-radius:10px; background:white; color:#0e3a6b; font-size:26px; line-height:1; cursor:pointer; }
+[data-cs-modal-close][hidden] { display:none !important; }
+@media print { .cs-modal-toolbar { display:none !important; } }
 </style>
 </head>
 <body class="cs-store min-h-screen flex flex-col antialiased">
@@ -378,8 +381,7 @@
               <p id="drawerItemCountText" class="text-[11px] text-slate-500 font-medium">0 productos seleccionados</p>
             </div>
           </div>
-          <button onclick="window.tiendaApp.closeCart()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition">
-            <i data-lucide="x" class="w-5 h-5"></i>
+          <button type="button" aria-label="Cerrar carrito" onclick="window.tiendaApp.closeCart()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition"><span class="inline-grid h-11 w-11 place-items-center text-2xl">×</span>
           </button>
         </div>
 
@@ -575,7 +577,7 @@
   </dialog>
 
   <!-- Script de la Tienda Standalone -->
-  <script type="module" src="../erp/js/tienda_standalone.js?v=order-remito-1"></script>
-<script src="../erp/js/modal-close.js?v=1"></script>
+  <script type="module" src="../erp/js/tienda_standalone.js?v=sticky-close-1"></script>
+<script src="../erp/js/modal-close.js?v=2"></script>
 </body>
 </html>

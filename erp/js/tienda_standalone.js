@@ -76,6 +76,7 @@ class TiendaStandaloneApp {
       dialog.returnValue = '';
       dialog.showModal();
     }
+    dialog.scrollTop = 0;
     return content;
   }
 
