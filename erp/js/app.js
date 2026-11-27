@@ -7,7 +7,7 @@ import { signInAdmin, signOutAdmin, restoreAdminSession, refreshAdminSession } f
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
 import { DashboardView } from './views/dashboard.js?v=dashboard-clean-1';
 import { VentasView } from './views/ventas.js?v=commercial-presentations-1';
-import { ComprasView } from './views/compras.js?v=manual-invoice-4';
+import { ComprasView } from './views/compras.js?v=manual-invoice-5';
 import { ProductosView } from './views/productos.js?v=commercial-presentations-1';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';
@@ -504,7 +504,7 @@ function bootCentralReadOnly() {
             control.classList.contains('btn-remove-ocr-row')
           );
           const purchaseControl = app.currentRoute === 'compras' && (
-            control.matches('[data-purchase-line], #btnConfirmPurchase') || handler.startsWith('window.comprasModule.removeItem(') ||
+            control.matches('[data-purchase-line], #btnConfirmPurchase, #openPurchaseNewProduct, #purchaseNewProductForm button') || handler.startsWith('window.comprasModule.removeItem(') ||
             /^window\.comprasModule\.(viewCentralPurchase|editCentralPurchase|cancelPurchase|setSupplierFilter|clearFilters)\(/.test(handler) ||
             control.matches('#centralPurchaseDetailModal .close-purchase-detail, #centralPurchaseDetailModal [data-edit-aromas]') ||
             control.closest('#centralPurchaseDetailModal [data-aroma-editor] form')
@@ -524,7 +524,7 @@ function bootCentralReadOnly() {
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');
         }
       }, true);
-      document.addEventListener('submit', e => { if (e.target.matches('dialog form[method=dialog]') || (app.currentRoute === 'clientes' && e.target.matches('[data-central-customer-list-form]')) || (app.currentRoute === 'productos' && e.target.matches('#productForm')) || (e.target.matches('#centralPurchaseDetailModal [data-aroma-editor] form') && app.currentRoute==='compras') || (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
+      document.addEventListener('submit', e => { if (e.target.matches('dialog form[method=dialog]') || (app.currentRoute === 'clientes' && e.target.matches('[data-central-customer-list-form]')) || (app.currentRoute === 'productos' && e.target.matches('#productForm')) || (app.currentRoute === 'compras' && e.target.matches('#purchaseNewProductForm')) || (e.target.matches('#centralPurchaseDetailModal [data-aroma-editor] form') && app.currentRoute==='compras') || (e.target.closest('#adjustStockModal') && app.currentRoute==='stock') || (e.target.closest('#purchaseOrderDialog') && app.currentRoute==='ordenes_compra')) return; e.preventDefault(); e.stopImmediatePropagation(); }, true);
     } catch (err) {
       error.textContent = err.message || 'No se pudo iniciar la sesión';
       await signOutAdmin().catch(()=>{});

@@ -476,7 +476,7 @@ export const ComprasView = {
             <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <div class="flex items-center justify-between mb-2">
                 <label class="block text-xs font-bold text-slate-700">Agregar Productos a la Factura</label>
-                <button type="button" onclick="document.getElementById('purchaseNewProduct').showModal()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
+                <button id="openPurchaseNewProduct" type="button" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
                   + Crear Producto si no existe
                 </button>
               </div>
@@ -617,6 +617,7 @@ export const ComprasView = {
 
   bindNewPurchaseProduct(container, products) {
     const dialog = container.querySelector('#purchaseNewProduct');
+    container.querySelector('#openPurchaseNewProduct').addEventListener('click', () => dialog.showModal());
     const form = dialog.querySelector('form');
     const submit = form.querySelector('[type="submit"]');
     const error = form.querySelector('[data-error]');
