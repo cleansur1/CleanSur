@@ -371,7 +371,10 @@ class TiendaStandaloneApp {
         sale_price: Number(p.sale_price), in_stock: Number(p.available_stock) > 0 || forms.some(form=>form.product_id===p.id && Number(form.available)>0),
         img_url: p.image_url || '../erp/assets/stayclean-logo.jpg',
         has_options: false, promo_badges: [], discount_pct: 0,
-        display_price: forms.some(form=>form.product_id===p.id) ? Math.min(...([forms.filter(form=>form.product_id===p.id).map(form=>Number(form.price)).concat(forms.some(form=>form.product_id===p.id && form.code===p.sku) && Number(p.sale_price)>0 ? [Number(p.sale_price)] : [])])) : Number(p.sale_price),
+        display_price: Number(p.sale_price) > 0 && forms.some(form => form.product_id === p.id && form.code === p.sku)
+          ? Number(p.sale_price)
+          : Math.min(...forms.filter(form => form.product_id === p.id).map(form => Number(form.price)).concat(
+              forms.some(form => form.product_id === p.id) ? [] : [Number(p.sale_price)])),
         reference_price: Number(p.sale_price)
       }));
       this.applyFilters();
@@ -625,14 +628,15 @@ class TiendaStandaloneApp {
                 ${escapeCatalogText(p.presentation || 'Presentación profesional')}
               </p>
 
-              <!-- Bloque de Precios Estilo Voltra (Precio actual + tachado) -->
+              <!-- Precio de venta -->
               <div class="pt-2 flex items-baseline gap-2">
                 <span class="price-stayclean text-base sm:text-lg font-black tracking-tight">
                   ${Formatter.money(p.display_price ?? p.sale_price)}
                 </span>
-                <span class="text-xs text-slate-400 line-through font-normal">
-                  ${Formatter.money(p.reference_price)}
-                </span>
+                ${p.discount_pct > 0 && p.reference_price > (p.display_price ?? p.sale_price) ? `
+                  <span class="text-xs text-slate-400 line-through font-normal">
+                    ${Formatter.money(p.reference_price)}
+                  </span>` : ''}
               </div>
             </div>
           </div>
