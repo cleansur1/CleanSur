@@ -371,7 +371,7 @@ class TiendaStandaloneApp {
         sale_price: Number(p.sale_price), in_stock: Number(p.available_stock) > 0 || forms.some(form=>form.product_id===p.id && Number(form.available)>0),
         img_url: p.image_url || '../erp/assets/stayclean-logo.jpg',
         has_options: false, promo_badges: [], discount_pct: 0,
-        display_price: forms.some(form=>form.product_id===p.id) ? Math.min(...forms.filter(form=>form.product_id===p.id).map(form=>Number(form.price))) : Number(p.sale_price),
+        display_price: forms.some(form=>form.product_id===p.id) ? Math.min(...([forms.filter(form=>form.product_id===p.id).map(form=>Number(form.price)).concat(forms.some(form=>form.product_id===p.id && form.code===p.sku) && Number(p.sale_price)>0 ? [Number(p.sale_price)] : [])])) : Number(p.sale_price),
         reference_price: Number(p.sale_price)
       }));
       this.applyFilters();
@@ -675,7 +675,9 @@ class TiendaStandaloneApp {
     if (!modal || !content) return;
 
     const forms = (this.presentations || []).filter(form=>form.product_id===p.id);
-    const form = forms.find(row=>row.id===presentationId) || forms.find(row=>this.availablePresentation(p,row)>0) || forms[0];
+    const hasBaseOption = Number(p.sale_price)>0 && forms.some(row=>row.code===p.sku);
+    const form = (presentationId === '' || (presentationId == null && hasBaseOption && this.availablePresentation(p)>0))
+      ? undefined : forms.find(row=>row.id===presentationId) || forms.find(row=>this.availablePresentation(p,row)>0) || forms[0];
     const aromas = [...(this.catalogAromas.get(p.id) || [])];
     const available = this.availablePresentation(p,form);
     const price = form ? Number(form.price) : p.sale_price;
@@ -720,7 +722,7 @@ class TiendaStandaloneApp {
         </p>
 
         <div class="space-y-3 border-t border-slate-100 pt-4">
-          ${forms.length ? `<label class="block font-semibold">Presentación <select id="modalPresentation" class="block w-full rounded-lg border p-3">${forms.map(row=>`<option value="${row.id}" ${row.id===form.id ? 'selected' : ''}>${escapeCatalogText(row.name)} · ${Formatter.money(Number(row.price))} · ${this.availablePresentation(p,row)} disp.</option>`).join('')}</select></label>` : ''}
+          ${forms.length ? `<label class="block font-semibold">Presentación <select id="modalPresentation" class="block w-full rounded-lg border p-3">${hasBaseOption ? `<option value="" ${form ? '' : 'selected'}>${escapeCatalogText(p.sale_unit)} · ${Formatter.money(p.sale_price)} · ${this.availablePresentation(p)} disp.</option>` : ''}${forms.map(row=>`<option value="${row.id}" ${row.id===form?.id ? 'selected' : ''}>${escapeCatalogText(row.name)} · ${Formatter.money(Number(row.price))} · ${this.availablePresentation(p,row)} disp.</option>`).join('')}</select></label>` : ''}
           ${available > 0 ? `
             ${aromas.length ? `<label class="block font-semibold text-slate-700">Aroma<select id="modalProductAroma" required class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3"><option value="">Seleccioná un aroma</option>${aromas.map(aroma=>`<option value="${escapeCatalogText(aroma)}">${escapeCatalogText(aroma.toLocaleUpperCase('es-AR'))}</option>`).join('')}</select></label>` : ''}
             <div class="flex items-center justify-between gap-3">
@@ -785,7 +787,7 @@ class TiendaStandaloneApp {
     if (!input || !input.reportValidity()) return;
     const aroma = document.getElementById('modalProductAroma');
     if (aroma && !aroma.reportValidity()) return;
-    const presentationId=document.getElementById('modalPresentation')?.value;
+    const presentationId=document.getElementById('modalPresentation')?.value || undefined;
     if (!this.addToCart(productId, input.valueAsNumber, aroma?.value || '', presentationId)) return;
     this.closeProductModal();
     if (checkout) return this.proceedToCheckout();
