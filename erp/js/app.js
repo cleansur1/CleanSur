@@ -7,7 +7,7 @@ import { signInAdmin, signOutAdmin, restoreAdminSession, refreshAdminSession } f
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
 import { DashboardView } from './views/dashboard.js?v=dashboard-clean-1';
 import { VentasView } from './views/ventas.js?v=commercial-presentations-1';
-import { ComprasView } from './views/compras.js?v=manual-invoice-3';
+import { ComprasView } from './views/compras.js?v=manual-invoice-4';
 import { ProductosView } from './views/productos.js?v=commercial-presentations-1';
 import { StockView } from './views/stock.js?v=6.0';
 import { PreciosView } from './views/precios.js?v=6.0';

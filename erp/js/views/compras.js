@@ -581,16 +581,12 @@ export const ComprasView = {
 
               <div class="p-3 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-800">
                 <i data-lucide="info" class="w-4 h-4 inline mr-1 text-amber-600"></i>
-                Al confirmar la compra, el stock aumentará automáticamente en unidad base y se actualizará el historial de costos.
+                Marcá «Stock ya cargado» solo en los renglones que ya ingresaste al inventario. Los demás sumarán stock al guardar.
               </div>
 
-              ${window.app.centralReadOnly ? `<label class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs">
-                <input type="checkbox" id="purchaseStockAlreadyEntered" class="mt-0.5">
-                <span><strong>El stock de esta factura ya fue cargado</strong><br>Registrá el comprobante sin sumar existencias ni presentaciones cerradas.</span>
-              </label>` : ''}
               <button id="btnConfirmPurchase" onclick="window.comprasModule.confirmPurchase()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition flex items-center justify-center gap-2">
                 <i data-lucide="check-circle" class="w-5 h-5"></i>
-                Confirmar e Ingresar Stock
+                Guardar factura
               </button>
             </div>
           </div>
@@ -1312,6 +1308,10 @@ export const ComprasView = {
     this.renderTable();
   },
 
+  setPurchaseLineStockEntered(index, checked) {
+    purchaseItems[index].stock_already_entered = checked;
+  },
+
   updateQty(index, qty) {
     const q = Number(qty);
     if (q > 0 && purchaseItems[index]) {
@@ -1354,6 +1354,10 @@ export const ComprasView = {
           <td class="py-3 px-3 font-mono font-bold text-slate-700">${escapeHtml(item.sku || '-')}</td>
           <td class="py-3 px-3">
             <span class="font-bold text-slate-900 block">${escapeHtml(item.product_name)}</span>
+            ${window.app.centralReadOnly ? `<label class="mt-1 flex items-center gap-2 text-xs text-slate-700">
+              <input type="checkbox" ${item.stock_already_entered ? 'checked' : ''} onchange="window.comprasModule.setPurchaseLineStockEntered(${idx}, this.checked)">
+              Stock ya cargado
+            </label>` : ''}
             <span class="text-[10px] text-slate-400">Unidad de compra: ${escapeHtml(item.unit_name)} (x${item.factor_to_base} base)</span>
           </td>
           <td class="py-3 px-3 text-center">
@@ -1420,10 +1424,10 @@ export const ComprasView = {
       const payload={supplier_id:selectedSupplier.id,invoice_number:invNum,
         date:document.getElementById('purchaseDate').value,
         notes:document.getElementById('purchaseNotes').value,
-        stock_already_entered:document.getElementById('purchaseStockAlreadyEntered').checked,
         items:purchaseItems.map(item=>({
         product_id:item.product_id,presentation_id:item.presentation_id,quantity:item.quantity,
         quantity_base:item.quantity*item.factor_to_base,
+        stock_already_entered:item.stock_already_entered === true,
         unit_cost:item.presentation_id ? item.unit_invoice_cost : item.unit_invoice_cost/item.factor_to_base
       }))};
       const signature=JSON.stringify(payload);
