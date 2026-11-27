@@ -1,6 +1,8 @@
 // Módulo de Pedidos de Clientes para Limpieza Caviahue
 // Estados: Nuevo, Preparando, Listo, Entregado. Conversión directa a Venta Facturada.
 
+import { bindArchive, isCancelled } from './archive.js?v=2';
+import { escapePresentation as escapeHtml } from '../presentations.js?v=1';
 import { salesDialog } from './sales_dialog.js';
 import { db } from '../db.js';
 import { getAdminSession } from '../supabase_admin.js';
@@ -9,7 +11,7 @@ import { Formatter } from '../models.js';
 
 export const PedidosView = {
   render(container) {
-    const orders = db.getOrders().filter(o => String(o.status).toUpperCase() !== 'CANCELADO');
+    const orders = db.getOrders();
 
     container.innerHTML = `
       <div class="space-y-6 animate-fade-in">
@@ -24,7 +26,7 @@ export const PedidosView = {
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div class="p-4 border-b border-slate-200 flex items-center justify-between">
             <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Listado de Pedidos</h3>
-            <span class="text-xs text-slate-500">${orders.length} pedidos</span>
+            <span class="text-xs text-slate-500">${orders.length} registrados</span>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
@@ -41,32 +43,33 @@ export const PedidosView = {
               </thead>
               <tbody class="divide-y divide-slate-100">
                 ${orders.map(o => {
+                  const cancelled = isCancelled(o.status);
                   let badge = 'bg-blue-100 text-blue-800';
                   if (o.status === 'Preparando') badge = 'bg-amber-100 text-amber-800';
                   if (o.status === 'Listo') badge = 'bg-indigo-100 text-indigo-800';
                   if (o.status === 'Entregado') badge = 'bg-emerald-100 text-emerald-800';
-                  if (o.status === 'Cancelado') badge = 'bg-rose-100 text-rose-800';
+                  if (cancelled) badge = 'bg-rose-100 text-rose-800';
 
                   return `
-                    <tr class="hover:bg-slate-50 transition">
-                      <td class="py-3 px-4 font-mono font-bold text-slate-800">${o.order_number}</td>
+                    <tr data-archive-row ${cancelled ? `data-archive-id="${escapeHtml(o.id)}"` : ''} class="hover:bg-slate-50 transition">
+                      <td class="py-3 px-4 font-mono font-bold text-slate-800">${escapeHtml(o.order_number)}</td>
                       <td class="py-3 px-4 text-slate-600">${Formatter.date(o.date)}</td>
-                      <td class="py-3 px-4 font-bold text-slate-900">${o.customer_name}</td>
+                      <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(o.customer_name)}</td>
                       <td class="py-3 px-4">
                         <span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badge}">
-                          ${o.status}
+                          ${escapeHtml(o.status)}
                         </span>
                       </td>
-                      <td class="py-3 px-4 text-slate-600">${o.payment_method}</td>
+                      <td class="py-3 px-4 text-slate-600">${escapeHtml(o.payment_method)}</td>
                       <td class="py-3 px-4 text-right font-bold text-slate-900">${Formatter.money(o.total)}</td>
-                      <td class="py-3 px-4 text-center space-x-2">
-                        ${!['ENTREGADO','CANCELADO'].includes(String(o.status).toUpperCase()) && !o.converted_to_sale_number ? `
+                      <td data-archive-actions class="py-3 px-4 text-center space-x-2">
+                        ${!cancelled && String(o.status).toUpperCase() !== 'ENTREGADO' && !o.converted_to_sale_number ? `
                           <button onclick="window.pedidosModule.convertOrder('${o.id}', this)" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold shadow-sm">
                             Convertir en Venta
                           </button>
                           ${window.app.centralReadOnly && ['','PENDING','PENDIENTE','UNPAID','REJECTED','RECHAZADO'].includes(String(o.payment_status || '').toUpperCase()) ? `<button onclick="window.pedidosModule.cancelOrder('${o.id}', this)" title="Eliminar pedido" aria-label="Eliminar pedido" class="inline-flex p-2 text-rose-700 hover:bg-rose-100 rounded"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
                         ` : `
-                          <span class="text-slate-400 text-[10px]">${o.converted_to_sale_number || o.status}</span>
+                          <span class="text-slate-400 text-[10px]">${escapeHtml(o.converted_to_sale_number || o.status)}</span>
                         `}
                       </td>
                     </tr>
@@ -79,6 +82,7 @@ export const PedidosView = {
       </div>
     `;
 
+    bindArchive(container, 'preparation-orders');
     if (window.lucide) window.lucide.createIcons();
   }
 };

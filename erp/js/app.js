@@ -6,7 +6,7 @@ import { db } from './db.js';
 import { signInAdmin, signOutAdmin, restoreAdminSession, refreshAdminSession } from './supabase_admin.js';
 import { readCentral, readCentralDashboard, centralTables } from './supabase_erp_adapter.js?v=order-alert-1';
 import { DashboardView } from './views/dashboard.js?v=dashboard-clean-1';
-import { VentasView } from './views/ventas.js?v=commercial-presentations-1';
+import { VentasView } from './views/ventas.js?v=preparation-archive-1';
 import { ComprasView } from './views/compras.js?v=manual-invoice-5';
 import { ProductosView } from './views/productos.js?v=commercial-presentations-1';
 import { StockView } from './views/stock.js?v=6.0';
@@ -518,7 +518,7 @@ function bootCentralReadOnly() {
             control.matches('#mainContent [data-archive-toggle], #mainContent [data-archive-id] [data-archive-action]');
           const salesControl = ['ventas', 'pedidos'].includes(app.currentRoute) &&
             (control.matches('[data-new-sale], [data-retry-sales], [data-pos-add], #btnConfirmSale, [data-history-action]') ||
-              handler.startsWith('window.pedidosModule.convertOrder(') || handler.startsWith('window.ventasModule.removeFromCart('));
+              handler.startsWith('window.pedidosModule.convertOrder(') || handler.startsWith('window.pedidosModule.cancelOrder(') || handler.startsWith('window.ventasModule.removeFromCart('));
           if ((app.currentRoute === "caja" && control.matches("[data-cash-action]")) || archiveControl || salesControl || purchaseOrderControl || safeNavigation || (app.currentRoute === 'clientes' && control.matches('[data-customer-credit], [data-customer-withdrawal], [data-save-cost-list]')) || profileControl || storeControl || priceControl || stockControl || ocrReadControl || purchaseControl || (app.currentRoute === 'stock' && control.closest('#adjustStockModal'))) return;
           e.preventDefault(); e.stopImmediatePropagation();
           alert('Esta operación todavía no está habilitada en el ERP de CleanSur.');

@@ -9,7 +9,7 @@ import { statusColor } from './status_badge.js';
 import { db } from '../db.js';
 import { getAdminSession } from '../supabase_admin.js';
 import { Formatter } from '../models.js';
-import { PedidosView } from './pedidos.js?v=6.2';
+import { PedidosView } from './pedidos.js?v=preparation-archive-1';
 import { salesDialog } from './sales_dialog.js';
 
 let cartItems = [];
