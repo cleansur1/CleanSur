@@ -9,7 +9,7 @@ import { Formatter } from '../models.js';
 
 export const PedidosView = {
   render(container) {
-    const orders = db.getOrders();
+    const orders = db.getOrders().filter(o => String(o.status).toUpperCase() !== 'CANCELADO');
 
     container.innerHTML = `
       <div class="space-y-6 animate-fade-in">
@@ -64,6 +64,7 @@ export const PedidosView = {
                           <button onclick="window.pedidosModule.convertOrder('${o.id}', this)" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold shadow-sm">
                             Convertir en Venta
                           </button>
+                          ${window.app.centralReadOnly && ['','PENDING','PENDIENTE','UNPAID','REJECTED','RECHAZADO'].includes(String(o.payment_status || '').toUpperCase()) ? `<button onclick="window.pedidosModule.cancelOrder('${o.id}', this)" title="Eliminar pedido" aria-label="Eliminar pedido" class="inline-flex p-2 text-rose-700 hover:bg-rose-100 rounded"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
                         ` : `
                           <span class="text-slate-400 text-[10px]">${o.converted_to_sale_number || o.status}</span>
                         `}
@@ -83,6 +84,26 @@ export const PedidosView = {
 };
 
 window.pedidosModule = {
+  async cancelOrder(orderId, button) {
+    if (!await salesDialog('Eliminar pedido', '¿Anular este pedido y reintegrar el stock descontado? Se conservará el historial.', 'Eliminar pedido')) return;
+    button.disabled = true;
+    try {
+      const token = getAdminSession()?.access_token;
+      if (!token) throw Error('Volvé a iniciar sesión en CleanSur.');
+      const response = await fetch(STAYCLEAN_SUPABASE_URL + '/rest/v1/rpc/stayclean_staff_cancel_preparation', {
+        method: 'POST',
+        headers: { apikey: STAYCLEAN_PUBLISHABLE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_order_id: orderId })
+      });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.message || 'No se pudo eliminar el pedido.');
+      db.centralSetTable('orders', db.getOrders().map(o => o.id === orderId ? {...o, status:'CANCELADO', stock_restored:true} : o));
+      window.app.showNotification('Pedido anulado', 'success');
+      window.app.navigate('ventas', {action:'prepare'});
+    } catch(error) {
+      await salesDialog('No se pudo eliminar el pedido', error.message);
+    } finally { button.disabled = false; }
+  },
   async convertOrder(orderId, button) {
     const central = window.app.centralReadOnly;
     const message = central
