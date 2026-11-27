@@ -57,7 +57,7 @@ interface Pending {
 
 function invoiceRequest(pending: Pending) {
   const detail = Object.entries({
-    Concepto: 1, DocTipo: pending.doc_tipo, DocNro: pending.doc_nro,
+    Concepto: 1, DocTipo: pending.doc_tipo, DocNro: pending.doc_nro || "0",
     CbteDesde: pending.numero, CbteHasta: pending.numero, CbteFch: pending.fecha.replace(/-/g, ""),
     ImpTotal: pending.total, ImpTotConc: 0, ImpNeto: pending.total,
     ImpOpEx: 0, ImpTrib: 0, ImpIVA: 0, MonId: "PES", MonCotiz: 1,
@@ -109,9 +109,9 @@ async function fiscalize(cfg: Config, saleId: string, iva: number, reconcile: bo
     throw new ArcaError("La venta debe estar completada y pendiente de facturación.");
   }
   const doc = String(sale.customer_cuit_dni ?? "").replace(/[.\s-]/g, "");
-  // This first-issuance workflow requires identification for all recipients.
-  const docType = /^\d{11}$/.test(doc) ? 80 : /^\d{7,8}$/.test(doc) && iva === 5 ? 96 : 0;
-  if (!docType) throw new ArcaError("Ingresá un CUIT en la venta, o un DNI si el receptor es Consumidor Final.");
+  const anonymousConsumer = iva === 5 && doc === "" && Number(sale.total) < 10_000_000;
+  const docType = anonymousConsumer ? 99 : /^\d{11}$/.test(doc) ? 80 : /^\d{7,8}$/.test(doc) && iva === 5 ? 96 : 0;
+  if (!docType) throw new ArcaError("Ingresá un CUIT válido, o un DNI si el receptor es Consumidor Final. Para Consumidor Final, el documento puede quedar vacío si el total es menor a $10.000.000.");
   const ticket = await getTicket(cfg);
   const conditions = await vatConditions(cfg, ticket);
   if (!conditions.some((condition) => condition.id === iva)) throw new ArcaError("Seleccioná una condición de IVA válida para Factura C.");
