@@ -1,4 +1,4 @@
-import { downloadOrderRemito } from './order_remito.js?v=1';
+import { downloadOrderRemito } from './order_remito.js?v=2';
 import { publicPresentations } from './presentations.js?v=1';
 // Controlador de Tienda Nube / Catálogo Público para Clientes
 // StayClean - Distribuidora Limpieza y Descartables (voltra.com.ar inspired)
