@@ -579,5 +579,31 @@
   <!-- Script de la Tienda Standalone -->
   <script type="module" src="../erp/js/tienda_standalone.js?v=sticky-close-1"></script>
 <script src="../erp/js/modal-close.js?v=2"></script>
+<style>
+#productDetailModal:not(.hidden){overflow:hidden;align-items:center;overscroll-behavior:none;box-sizing:border-box;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
+#productDetailModal #productDetailContent{min-height:0;max-height:100%;overflow-y:auto!important;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+</style>
+<script>
+(() => {
+ const modal=document.getElementById('productDetailModal');
+ let saved=null;
+ function sync(){
+  if(!modal.classList.contains('hidden')){
+   if(saved)return;
+   const b=document.body,h=document.documentElement;
+   saved={y:window.scrollY,body:b.style.cssText,root:h.style.overflow};
+   Object.assign(b.style,{position:'fixed',top:'-'+saved.y+'px',left:'0',right:'0',width:'100%',overflow:'hidden'});
+   h.style.overflow='hidden';
+  }else if(saved){
+   const old=saved;saved=null;
+   document.body.style.cssText=old.body;
+   document.documentElement.style.overflow=old.root;
+   window.scrollTo(0,old.y);
+  }
+ }
+ new MutationObserver(sync).observe(modal,{attributes:true,attributeFilter:['class']});
+ sync();
+})();
+</script>
 </body>
 </html>
