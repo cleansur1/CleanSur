@@ -38,6 +38,7 @@ export const ArcaView = {
           <label class="block">Condición frente al IVA del receptor
             <select required class="ml-2 rounded border px-2 py-1"></select>
           </label>
+          <p class="text-sm text-slate-600">Para Consumidor Final por debajo de $10.000.000, el documento es opcional.</p>
           <button type="submit" class="rounded-lg bg-emerald-700 px-3 py-2 text-white">Solicitar CAE</button>
         </form>
         <button type="button" data-fiscal-reconcile hidden class="rounded-lg border px-3 py-2">Conciliar solicitud pendiente</button>
@@ -106,7 +107,7 @@ export const ArcaView = {
       const sale = sales[0];
       if (!sale || sale.status !== 'COMPLETADA' || sale.arca_invoice_id) return;
       find('[data-fiscal-preview]').textContent = [sale.sale_number, sale.customer_name,
-        sale.customer_cuit_dni || 'Documento pendiente', Formatter.money(Number(sale.total))].join(' · ');
+        sale.customer_cuit_dni || 'Sin documento', Formatter.money(Number(sale.total))].join(' · ');
       const select = form.querySelector('select');
       select.add(new Option('Seleccioná la condición fiscal', ''));
       for (const option of vat) select.add(new Option(option.label, option.id));
